@@ -24,7 +24,7 @@ static EVENT_HANDLER(application_ready)
     CHECK(CNET_write_physical(link, msg, &length));
     double bandwidth = (double) linkinfo[link].bandwidth / 1000000.;
     double transmission_delay = (double) (length * 8) / bandwidth; 
-    double t = transmission_delay + 100 /*linkinfo[link].propagationdelay*/;
+    double t = transmission_delay + 1 /*linkinfo[link].propagationdelay*/;
     CNET_start_timer(EV_TIMER1, t, 0);
     timer_started = true;
   }
@@ -43,13 +43,14 @@ static EVENT_HANDLER(timeout)
     //calcute how long a frame needs to travel over the link
     double bandwidth = (double) linkinfo[link].bandwidth / 1000000.;
     double transmission_delay = (double) (length * 8) / bandwidth; 
-    double t = transmission_delay + 100 /*linkinfo[link].propagationdelay*/;
+    double t = transmission_delay + 1 /*linkinfo[link].propagationdelay*/;
     //~ printf("propagationdelay: %d µs\n",linkinfo[link].propagationdelay);
     //~ printf("bandwidth: %f bit/µsec \n", bandwidth);
     //~ printf("length: %f bit\n", length * 8);
     //~ printf("transmission delay: %f\n", transmission_delay);
     //~ printf("timer: %f µsec\n", t);
     CNET_start_timer(EV_TIMER1, t, 0);
+    free(msg);
   } else {
     timer_started = false;
   }
