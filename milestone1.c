@@ -3,54 +3,63 @@
 #include <cnet.h>
 #include <cnetsupport.h>
 
+#define MICRO            0.000001
+#define BYTE_LENGTH      8
+#define LINK_DELAY       1
+#define QUEUE_MAX_MSGS  20
+#define QUEUE_MIN_MSGS  10
+
 QUEUE	msgQ;
 
 char msg[MAX_MESSAGE_SIZE];
 
 bool timer_started;
 
+void set_timeout(size_t length)
+{
+  printf(" DATA transmitted: %d bytes\n", length);
+  //calcute how long a frame needs to travel over the link
+  double bandwidth = (double) linkinfo[1].bandwidth * MICRO;
+  double transmission_delay = (double) (length * BYTE_LENGTH) / bandwidth; 
+  double t = transmission_delay + LINK_DELAY;
+  CNET_start_timer(EV_TIMER1, t, 0);
+}
+
 static EVENT_HANDLER(application_ready)
 {
   int	link = 1;
   CnetAddr destaddr;
-
   size_t length = sizeof(msg);
+
   CHECK(CNET_read_application(&destaddr, msg, &length));
-  printf(" DATA read from applicaiton: %d bytes\n", length);
-  if (queue_nitems(msgQ) >= 20) CNET_disable_application(ALLNODES);
+  if (queue_nitems(msgQ) >= QUEUE_MAX_MSGS) CNET_disable_application(ALLNODES);
   if (timer_started) {
     queue_add(msgQ, msg, length);
   } else {
     CHECK(CNET_write_physical(link, msg, &length));
-    double bandwidth = (double) linkinfo[link].bandwidth / 1000000.;
-    double transmission_delay = (double) (length * 8) / bandwidth; 
-    double t = transmission_delay + 1 /*linkinfo[link].propagationdelay*/;
-    CNET_start_timer(EV_TIMER1, t, 0);
+    set_timeout(length);
     timer_started = true;
   }
 }
 
-static EVENT_HANDLER(timeout)
+static EVENT_HANDLER(link_ready)
 {
   int	link = 1;
   size_t length;
   char *msg;
 
   if (queue_nitems(msgQ)) {
-    msg = queue_remove(msgQ, &length);
-    if (queue_nitems(msgQ) <= 10) CNET_enable_application(ALLNODES);
-    CHECK(CNET_write_physical(link, msg, &length));
-    //calcute how long a frame needs to travel over the link
-    double bandwidth = (double) linkinfo[link].bandwidth / 1000000.;
-    double transmission_delay = (double) (length * 8) / bandwidth; 
-    double t = transmission_delay + 1 /*linkinfo[link].propagationdelay*/;
-    //~ printf("propagationdelay: %d µs\n",linkinfo[link].propagationdelay);
-    //~ printf("bandwidth: %f bit/µsec \n", bandwidth);
-    //~ printf("length: %f bit\n", length * 8);
-    //~ printf("transmission delay: %f\n", transmission_delay);
-    //~ printf("timer: %f µsec\n", t);
-    CNET_start_timer(EV_TIMER1, t, 0);
-    free(msg);
+    msg = queue_peek(msgQ, &length);
+    if (queue_nitems(msgQ) <= QUEUE_MIN_MSGS) CNET_enable_application(ALLNODES);
+    int ph_status = CNET_write_physical(link, msg, &length);
+    if (ph_status == ER_TOOBUSY) {
+      CNET_start_timer(EV_TIMER1, 1, 0);
+    } else {
+      CHECK(ph_status);
+      set_timeout(length);
+      msg = queue_remove(msgQ, &length);
+      free(msg);
+    }
   } else {
     timer_started = false;
   }
@@ -63,7 +72,7 @@ static EVENT_HANDLER(physical_ready)
 
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
-  printf("\t\t\t\t\tDATA received: %d bytes\n", length);
+  printf("\t\t\t\tDATA received: %d bytes\n", length);
   CHECK(CNET_write_application(msg, &length));
 }
 
@@ -71,7 +80,7 @@ EVENT_HANDLER(reboot_node)
 {
     CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
     CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
-    CHECK(CNET_set_handler(EV_TIMER1,           timeout, 0));
+    CHECK(CNET_set_handler(EV_TIMER1,           link_ready, 0));
     
     CNET_enable_application(ALLNODES);
 
