@@ -11,9 +11,9 @@ static EVENT_HANDLER(application_ready)
 
   size_t length = sizeof(msg);
   CHECK(CNET_read_application(&destaddr, msg, &length));
-
+  CNET_disable_application(ALLNODES);
   CHECK(CNET_write_physical(link, msg, &length));
-  printf(" DATA transmitted: '%s' (%d bytes)\n", msg, length);
+  //printf(" DATA transmitted: '%s' (%d bytes)\n", msg, length);
 }
 
 static EVENT_HANDLER(physical_ready)
@@ -23,9 +23,10 @@ static EVENT_HANDLER(physical_ready)
 
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
-  printf("\t\t\t\tDATA received: '%s' (%d bytes), ", msg, length);
+  CNET_enable_application(ALLNODES);
+  //printf("\t\t\t\tDATA received: '%s' (%d bytes), ", msg, length);
   CHECK(CNET_write_application(msg, &length));
-  printf("up to application\n");
+  //printf("up to application\n");
 }
 
 EVENT_HANDLER(reboot_node)
