@@ -17,11 +17,11 @@ static EVENT_HANDLER(application_ready)
   CHECK(CNET_write_physical(link, msg, &length));
   //calcute how long a frame needs to travel over the link
   double bandwidth = (double) linkinfo[link].bandwidth / 1000000.;
-  double a = (double)(length*8.) / bandwidth; 
-  double t = a + linkinfo[link].propagationdelay;
+  double transmission_delay = (double)(length*8.) / bandwidth; 
+  double t = transmission_delay + linkinfo[link].propagationdelay;
   printf("bandwidth: %f bit/µsec \n", bandwidth);
   printf("length: %f bit\n", length*8.);
-  printf("a: %f\n", a);
+  printf("transmission delay: %f\n", transmission_delay);
   printf("timer: %f µsec\n", t);
   CNET_start_timer(EV_TIMER1, t, 0);
 }
@@ -39,7 +39,7 @@ static EVENT_HANDLER(physical_ready)
 
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
-  CNET_enable_application(ALLNODES);
+  //CNET_enable_application(ALLNODES);
   //printf("\t\t\t\tDATA received: '%s' (%d bytes), ", msg, length);
   CHECK(CNET_write_application(msg, &length));
   //printf("up to application\n");
