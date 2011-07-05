@@ -138,9 +138,9 @@ static EVENT_HANDLER(application_ready)
 /**
  * link_ready() event-handler.
  *
- * It is a timer which counts how long a message needs to be transmitted over
- * a link and then calls the <code>transmit()</code> methode to send the next
- * message.
+ * It is called whenever a timeout indicating complete transmission of
+ * a message occurs, which means the link is not busy any more.
+ * It calls <code>transmit()</code>.
  */
 static EVENT_HANDLER(link_ready)
 {
