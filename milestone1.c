@@ -28,12 +28,12 @@
 #define LINK_DELAY       1
 
 /**
- * Maximal lenght of queues.
+ * Maximal length of queues.
  */
 #define QUEUE_MAX_MSGS  20
 
 /**
- * Minimal lenght of queues.
+ * Minimal length of queues.
  */
 #define QUEUE_MIN_MSGS  10
 
@@ -55,10 +55,10 @@ bool timer_started;
 /**
  * Returns the transmission delay.
  *
- * The transmission delay is the lenght of the message divided by the bandwidth
+ * The transmission delay is the length of the message divided by the bandwidth
  * of the link.
  *
- * @param Length the lenght of the message.
+ * @param Length the length of the message.
  * @param Link the link to send the message over.
  * @return Returns the calculated transmission delay.
  */
