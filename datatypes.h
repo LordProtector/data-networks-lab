@@ -1,8 +1,8 @@
-struct message
+typedef struct
 {
   char* message;
   size_t size;
-}
+} MESSAGE;
 
 /* Data structures for transport layer */
 
@@ -13,13 +13,13 @@ struct segment_header
   bool isfirst;
   unsigned int ackid;
   short ackordering;  
-}
+};
 
-struct segment
+typedef struct
 {
   struct segment_header header;
   char* payload;
-}
+} SEGMENT;
 
 /* Data structures for network layer. */
 struct datagram_header
@@ -28,13 +28,13 @@ struct datagram_header
   CnetAddr destaddr;
   char hoplimit;
   bool routing; //upper layer: 1 = routing protocol, 0 = network protocol
-}
+};
 
-struct datagram 
+typedef struct 
 {
   struct datagram_header header;
   char* payload;
-}
+} DATAGRAM;
 
 /* Data structure for link layer. */
 
@@ -45,10 +45,10 @@ struct frame_header
   unsigned int id;
   short ordering;
   bool isfirst;
-}
+};
 
-struct frame
+typedef struct
 {
   struct frame_header header;
   char* payload;
-}
+} FRAME;
