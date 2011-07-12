@@ -11,6 +11,16 @@
 #include <string.h>
 #include <cnet.h>
 #include <cnetsupport.h>
+#include "datatypes.h"
+#include "transport.h"
+#include "network.h"
+#include "link.h"
+
+/**
+ * Message of MAX_MESSAGE_SIZE.
+ */
+char msg[MAX_MESSAGE_SIZE];
+
 
 /**
  * aplication_ready() event-handler.
@@ -55,9 +65,9 @@ EVENT_HANDLER(reboot_node)
     CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
     CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
     
-    link_init();
-    networt_init();
-    transport_init();
+    //link_init();
+    //network_init();
+    //transport_init();
     //CNET_enable_application(ALLNODES);
 }
 
