@@ -1,0 +1,45 @@
+Brainstorming Design Protocol-Stack Milestone 2 & 3
+
+Goals:
+-fragmentation
+-reliability
+-routing
+-flow control (brauchen wir das?)
+-congestion control
+
+
+Approach 1
+==========
+kein Transport-Layer
+Network-Layer: routing
+starker Link-Layer: point2point, reliability, Framementation
+Beschreibung:
+(De)Fragmentierung auf jedem (Link-Layer von jedem) Hop (immer max MTU)
+Bewertung: 
+(-) latency, da delay of jedem Hop
+(+) throughput, da weniger header und keine umsonst versendeten Frames
+(-) congestion control nicht sinnvoll implementierbar
+
+Approach 2
+==========
+Transport-Layer: reliability, congestion control, Segmentation
+Network-Layer: routing
+Link-Layer: point2point, Framementation
+Beschreibung:
+Framementation als Notfall-Fragmentierung, im besten Fall sind die Packete bereits durch Segmentation klein genug, ähnlich Internet-Protokol-Stack mit IPv4
+Bewertung:
+(+) latency besser als Approach 1
+(-) throughput, da viele header
+
+Approach 3
+==========
+Transport-Layer: reliability, congestion control, Sementation, actualPathMinMTU Feedback
+Network-Layer: routing, MTU auf bisheriger Strecke
+Link-Layer: point2point
+Beschreibung:
+Transport-Layer muss minimale MTU auf gerouteter Strecke ermitteln:
+Wenn Paket zu groß -> Network-Layer gibt negatives Feedback (überschrittene MTU) an den Sender (eigenes Paket/Protokol) und verwirft das Paket
+Wenn Paket am Receiver ankommt -> Transport-Layer gibt positives Feedback (actualPathMinMTU) an den Sender (gepiggybackt)
+Bewertung:
+(+) latency besser als Approach 1
+(/) throughput, da leicht leicht weniger header als Approach 2
