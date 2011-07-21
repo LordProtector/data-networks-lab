@@ -1,3 +1,8 @@
+#include <cnet.h>
+
+#define MAX_SEGMENT_SIZE  sizeof(SEGMENT)
+#define MAX_DATAGRAM_SIZE sizeof(DATAGRAM)
+
 typedef struct
 {
   char* message;
@@ -18,7 +23,7 @@ struct segment_header
 typedef struct
 {
   struct segment_header header;
-  char* payload;
+  char payload[MAX_MESSAGE_SIZE];
 } SEGMENT;
 
 /* Data structures for network layer. */
@@ -33,22 +38,21 @@ struct datagram_header
 typedef struct 
 {
   struct datagram_header header;
-  char* payload;
+  char payload[MAX_SEGMENT_SIZE];
 } DATAGRAM;
 
 /* Data structure for link layer. */
 
-struct frame_header
+typedef struct
 {
-  size_t length;
-  int checksum;
-  unsigned int id;
-  short ordering;
-  bool isfirst;
-};
+  uint16_t length;   // length of payload, most significant bit is is_first flag
+  uint16_t checksum; // checksum of header
+  uint8_t  id;       // id of datagram
+  uint8_t  ordering; // determines position of playload within datagram
+} frame_header;
 
 typedef struct
 {
-  struct frame_header header;
-  char* payload;
+  frame_header header;
+  char payload[MAX_DATAGRAM_SIZE];
 } FRAME;
