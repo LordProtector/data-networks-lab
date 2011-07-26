@@ -12,9 +12,9 @@
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
-#include "transport.h"
-#include "network.h"
-#include "link.h"
+#include "transport.c"
+#include "network.c"
+#include "link.c"
 
 /**
  * Message of MAX_MESSAGE_SIZE.
