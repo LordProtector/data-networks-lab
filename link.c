@@ -13,30 +13,30 @@
 /**
  * Muliply a second with this constant to get a microsecond.
  */
-#define MICRO            0.000001
+#define MICRO 0.000001
 
 /**
  * Number of bits forming a byte.
  */
-#define BYTE_LENGTH      8
+#define BYTE_LENGTH 8
 
 /**
  * Link delay.
  */
-#define LINK_DELAY       1
+#define LINK_DELAY 1
 
 /**
  * Maximal length of queues.
  */
-#define QUEUE_MAX_MSGS  20
+#define QUEUE_MAX_MSGS 20
 
 /**
  * Minimal length of queues.
  */
-#define QUEUE_MIN_MSGS  10
+#define QUEUE_MIN_MSGS 10
 
 /**
- * Used for setting or querieing isFirst flag of a frame
+ * Used for setting and querieing isLast flag of a frame
  */
 #define IS_LAST 1 << 15
 
@@ -52,79 +52,29 @@
 /* Structs */
 
 /**
- * Represents an ouput link
+ * Represents a link
  */
 typedef struct
 {
-  bool    timerStarted;
-  QUEUE   queue;
-  uint8_t curId;
-} out_link;
+  bool     busy;     // is the link sending something?
+  QUEUE    queue;    // link's output queue
+  uint8_t  sendId;   // id of current datagram in sending process
+  bool     corrupt;  // is current datagram corrupt
+  uint8_t  recId;    // id of last received frame
+  uint8_t  ordering; // expected ordering of next received frame
+  DATAGRAM buffer;   // input buffer
+  size_t   size;     // how far the buffer is filled
+} link_t;
 
-/**
- * Represents an input link
- */
-typedef struct
-{
-  bool     datagramCorrupt;
-  uint8_t  curId;
-  uint8_t  ordering;
-  DATAGRAM buffer;
-  size_t   size;
-} in_link;
+typedef unsigned char * buf_t;
 
 
 /* Variables */
 
 /**
- * Is the timer started or not.
+ * Status and data of links of this host
  */
-bool *timerStarted;
-
-/**
- * Array of output queues (one per link)
- */
-QUEUE *linkQueues;
-
-/**
- * Array of datagram-ids currently transmitting (one per link)
- */
-uint8_t *sendId;
-
-/**
- * Array of datagram-ids currently receiving (one per link)
- */
-uint8_t *recId;
-
-/**
- * Indicates per link whether the datagram the last received frame belongs to is corrupted
- */
-bool *datagramCorrupt;
-
-/**
- * Buffers for frames belonging to same datagram (one per link)
- */
-DATAGRAM *buffers;
-
-/**
- * Store how far the buffers are filled
- */
-size_t *bufferSizes;
-
-/**
- * Ordering of the next expected frame (per link)
- */
-uint8_t *orderings;
-
-/**
- * Ouput links of this host
- */
-out_link *outLinks;
-
-/**
- * Input links of this host
- */
-in_link *inLinks;
+link_t *linkData;
 
 
 /* Private functions */
@@ -164,11 +114,11 @@ void transmit_frame(int link)
   size_t length;
   double timeout;
 
-  if (queue_nitems(linkQueues[link])) {
-    msg = queue_peek(linkQueues[link], &length);
-    if (queue_nitems(linkQueues[link]) <= QUEUE_MIN_MSGS) {
-      CNET_enable_application(ALLNODES);
-    }
+  if (queue_nitems(linkData[link].queue)) {
+    msg = queue_peek(linkData[link].queue, &length);
+    //~ if (queue_nitems(linkData[link].queues) <= QUEUE_MIN_MSGS) {
+      //~ CNET_enable_application(ALLNODES);
+    //~ }
     int ph_status = CNET_write_physical(link, msg, &length);
     if (ph_status == ER_TOOBUSY) {
       // If link is still busy wait another microsecond
@@ -176,14 +126,14 @@ void transmit_frame(int link)
     } else {
       CHECK(ph_status);
       printf(" DATA transmitted: %d bytes\n", length);
-      msg = queue_remove(linkQueues[link], &length);
+      msg = queue_remove(linkData[link].queue, &length);
       free(msg);
       timeout = transmission_delay(length, link) + LINK_DELAY;
     }
     CNET_start_timer(EV_TIMER1, timeout, link);
-    timerStarted[link] = true;
+    linkData[link].busy = true;
   } else {
-    timerStarted[link] = false;
+    linkData[link].busy = false;
   }
 }
 
@@ -204,31 +154,32 @@ void link_transmit(char *datagram, size_t size, int link)
   size_t processedBytes = 0;
   size_t maxPayloadSize = linkinfo[link].mtu - sizeof(frame_header);
 
-  frame.header.id = sendId[link]++;
+  frame.header.id = linkData[link].sendId++;
 
   for (int i = 0; remainingBytes > 0; i++) {
     frame.header.size = MIN(remainingBytes, maxPayloadSize);
+    size_t frameSize = sizeof(frame_header) + frame.header.size;
     if (remainingBytes < maxPayloadSize) {
       frame.header.size |= IS_LAST;
     }
     frame.header.ordering = i;
     frame.header.checksum = 0;
-    frame.header.checksum = CNET_crc16((unsigned char *) &frame, sizeof(frame_header) + frame.header.size);
+    frame.header.checksum = CNET_crc16((buf_t) &frame, frameSize);
     memcpy(frame.payload, datagram + processedBytes, frame.header.size);
 
-    queue_add(linkQueues[link], &frame, frame.header.size + sizeof(frame_header));
+    queue_add(linkData[link].queue, &frame, frameSize);
 
     remainingBytes -= frame.header.size;
     processedBytes += frame.header.size;
   }
 
-  if (!timerStarted[link]) {
+  if (linkData[link].busy) {
     transmit_frame(link);
   }
 }
 
 /**
- *
+ * Takes a received frame and prepares a datagram for upper layer from it.
  *
  * @param data The received data.
  * @param size The size of the data.
@@ -237,35 +188,35 @@ void link_transmit(char *datagram, size_t size, int link)
 void link_receive(char *data, size_t size, int link)
 {
   FRAME *frame = (FRAME *) data;
+  uint16_t checksum = frame->header.checksum;
+  frame->header.checksum = 0;
 
-  if (frame->header.id == recId[link]) {
-    if (datagramCorrupt[link] || frame->header.ordering != orderings[link]) {
-      datagramCorrupt[link] = true;
+  if (CNET_crc16((buf_t) frame, size) != checksum) {
+    linkData[link].corrupt = true;
+    return;
+  }
+
+  if (frame->header.id == linkData[link].recId) {
+    if (linkData[link].corrupt || frame->header.ordering != linkData[link].ordering) {
+      linkData[link].corrupt = true;
       return;
     }
   } else {
     if (frame->header.ordering == 0) {
-      datagramCorrupt[link] = false;
-      bufferSizes[link] = 0;
-      orderings[link] = 0;
+      linkData[link].corrupt = false;
+      linkData[link].size = 0;
     } else {
-      datagramCorrupt[link] = true;
+      linkData[link].corrupt = true;
       return;
     }
-    recId[link] = frame->header.id;
+    linkData[link].recId = frame->header.id;
   }
-  uint16_t checksum = frame->header.checksum;
-  frame->header.checksum = 0;
 
-  if (CNET_crc16((unsigned char *) frame, sizeof(frame_header) + frame->header.size) == checksum) {
-    orderings[link] = frame->header.ordering;
-    memcpy(&buffers[link] + bufferSizes[link], frame->payload, frame->header.size);
-    bufferSizes[link] += frame->header.size;
-  } else {
-    datagramCorrupt[link] = true;
-    return;
-  }
-  if (frame->header.size & IS_LAST && !datagramCorrupt[link]) {
+  linkData[link].ordering = frame->header.ordering + 1;
+  linkData[link].size += frame->header.size;
+  memcpy(&linkData[link].buffer + linkData[link].size, frame->payload, frame->header.size);
+
+  if (frame->header.size & IS_LAST && !linkData[link].corrupt) {
     // TODO give datagram to upper layer
   }
 }
@@ -277,22 +228,15 @@ void link_receive(char *data, size_t size, int link)
  */
 void link_init()
 {
-  linkQueues      = malloc((nodeinfo.nlinks + 1) * sizeof(*linkQueues));
-  datagramCorrupt = malloc((nodeinfo.nlinks + 1) * sizeof(*datagramCorrupt));
-  sendId          = malloc((nodeinfo.nlinks + 1) * sizeof(*sendId));
-  recId           = malloc((nodeinfo.nlinks + 1) * sizeof(*recId));
-  timerStarted    = malloc((nodeinfo.nlinks + 1) * sizeof(*timerStarted));
-  buffers         = malloc((nodeinfo.nlinks + 1) * sizeof(DATAGRAM));
-  bufferSizes     = malloc((nodeinfo.nlinks + 1) * sizeof(*bufferSizes));
-  orderings       = malloc((nodeinfo.nlinks + 1) * sizeof(*orderings));
+  linkData = malloc((nodeinfo.nlinks + 1) * sizeof(*linkData));
 
   for (int i = 0; i <= nodeinfo.nlinks; i++) {
-    linkQueues[i]      = queue_new();
-    datagramCorrupt[i] = false;
-    sendId[i]          = 0;
-    recId[i]           = 0;
-    timerStarted[i]    = false;
-    bufferSizes[i]     = 0;
-    orderings[i]       = 0;
+    linkData[i].busy     = false;
+    linkData[i].queue    = queue_new();
+    linkData[i].sendId   = 0;
+    linkData[i].corrupt  = false;
+    linkData[i].recId    = 0;
+    linkData[i].ordering = 0;
+    linkData[i].size     = 0;
   }
 }
