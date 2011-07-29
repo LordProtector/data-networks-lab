@@ -1,3 +1,6 @@
+#ifndef DATATYPES_H_
+#define DATATYPES_H_
+
 #include <cnet.h>
 
 #define MAX_SEGMENT_SIZE  sizeof(SEGMENT)
@@ -7,7 +10,7 @@
 
 typedef struct
 {
-  char[MAX_MESSAGE_SIZE] data;
+  char data[MAX_MESSAGE_SIZE];
   size_t size;
 } MESSAGE;
 
@@ -36,7 +39,7 @@ typedef struct
   uint8_t hoplimit; // time to live + routing flag: 1 = routing protocol, 0 = network protocol
 } datagram_header;
 
-typedef struct 
+typedef struct
 {
   datagram_header header;
   char payload[MAX_SEGMENT_SIZE];
@@ -58,3 +61,5 @@ typedef struct
   frame_header header;
   char payload[MAX_DATAGRAM_SIZE];
 } FRAME;
+
+#endif

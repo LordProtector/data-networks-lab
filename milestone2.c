@@ -1,6 +1,6 @@
 /**
  * milstone2.c
- *  
+ *
  * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of milstone 2 of the data networks lab 2011
@@ -51,7 +51,19 @@ static EVENT_HANDLER(physical_ready)
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
   printf("\t\t\t\tDATA received: %d bytes\n", length);
-  //TODO call link layer
+  link_receive(msg, length, link);
+}
+
+/**
+ * link_ready() event-handler.
+ *
+ * It is called whenever a timeout indicating complete transmission of
+ * a message occurs, which means the link is not busy any more.
+ * It calls <code>transmit()</code>.
+ */
+static EVENT_HANDLER(link_ready)
+{
+  transmit_frame(data); // data keeps the link
 }
 
 /**
@@ -64,10 +76,11 @@ EVENT_HANDLER(reboot_node)
 {
     CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
     CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
-    
-    //link_init();
-    //network_init();
-    //transport_init();
-    //CNET_enable_application(ALLNODES);
+    CHECK(CNET_set_handler(EV_TIMER1,           link_ready, 0));
+
+    link_init();
+    network_init();
+    transport_init();
+    CNET_enable_application(ALLNODES);
 }
 
