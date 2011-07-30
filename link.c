@@ -41,12 +41,14 @@
 /**
  * Used for setting and querieing isLast flag of a frame
  */
-#define IS_LAST (1 << 15)
+#define IS_LAST (1 << 7)
 
 /**
  * Size of an input buffer
  */
 #define BUFFER_SIZE MAX_DATAGRAM_SIZE
+
+#define FRAME_ID_LIMIT (UINT8_MAX >> 2)
 
 
 /* Macros */
@@ -67,6 +69,7 @@ typedef struct link_t
   bool     busy;                // is the link sending something?
   QUEUE    queue;               // link's output queue
   uint8_t  sendId;              // id of current datagram in sending process
+  size_t   maxPayloadSize;      // the maximum payload sendable in one frame
   bool     corrupt;             // is current datagram corrupt
   uint8_t  recId;               // id of last received frame
   uint8_t  ordering;            // expected ordering of next received frame
@@ -94,39 +97,34 @@ link_t *linkData;
  * @param frame The frame for which the header is to be encoded
  * @return The complete size of the frame
  */
-size_t marshal_frame_header(frame_header_simple *header, FRAME *frame)
+void marshal_frame_header(frame_header_simple *header, FRAME *frame, size_t size)
 {
-  frame->header.size     = header->size;
   frame->header.id       = header->id;
   frame->header.ordering = header->ordering;
   frame->header.checksum = 0;
-  size_t frameSize = sizeof(frame_header) + header->size;
 
   if (header->isLast) {
-    frame->header.size |= IS_LAST;
+    frame->header.id |= IS_LAST;
   }
-  frame->header.checksum = CNET_crc16((buf_t) frame, frameSize);
-
-  return frameSize;
+  frame->header.checksum = CNET_crc16((buf_t) frame, size);
 }
 
 /**
  * Decodes frame header.
  *
- * @param header The encoded header
+ * @param header The decoded header
  * @param frame The frame from which the header is to be decoded
  * @return Whether decoding was successful
  */
-bool unmarshal_frame_header(frame_header_simple *header, FRAME *frame)
+bool unmarshal_frame_header(frame_header_simple *header, FRAME *frame, size_t size)
 {
-  header->size           = frame->header.size & (IS_LAST ^ UINT16_MAX);
-  header->id             = frame->header.id;
+  header->id             = frame->header.id & (IS_LAST ^ UINT8_MAX);
   header->ordering       = frame->header.ordering;
-  header->isLast         = frame->header.size & IS_LAST;
+  header->isLast         = frame->header.id & IS_LAST;
   uint16_t checksum      = frame->header.checksum;
   frame->header.checksum = 0;
 
-  return CNET_crc16((buf_t) frame, header->size + sizeof(frame_header)) == checksum;
+  return CNET_crc16((buf_t) frame, size) == checksum;
 }
 
 /**
@@ -205,21 +203,21 @@ void link_transmit(int link, char *data, size_t size)
   frame_header_simple header;
   size_t remainingBytes = size;
   size_t processedBytes = 0;
-  size_t maxPayloadSize = linkinfo[link].mtu - sizeof(frame_header);
 
-  header.id = linkData[link].sendId++;
+  header.id = linkData[link].sendId++ % FRAME_ID_LIMIT;
 
   for (int i = 0; remainingBytes > 0; i++) {
-    header.size = MIN(remainingBytes, maxPayloadSize);
+    size_t payloadSize = MIN(remainingBytes, linkData[link].maxPayloadSize);
     header.ordering = i;
-    memcpy(frame.payload, data + processedBytes, header.size);
+    memcpy(frame.payload, data + processedBytes, payloadSize);
 
-    remainingBytes -= header.size;
-    processedBytes += header.size;
+    remainingBytes  -= payloadSize;
+    processedBytes  += payloadSize;
+    size_t frameSize = payloadSize + sizeof(frame_header);
 
     header.isLast = !remainingBytes;
 
-    size_t frameSize = marshal_frame_header(&header, &frame);
+    marshal_frame_header(&header, &frame, frameSize);
 
     queue_add(linkData[link].queue, &frame, frameSize);
   }
@@ -246,7 +244,7 @@ void link_receive(int link, char *data, size_t size)
   FRAME *frame = (FRAME *) data;
   frame_header_simple header;
 
-  if (!unmarshal_frame_header(&header, frame)) {
+  if (!unmarshal_frame_header(&header, frame, size)) {
     linkData[link].corrupt = true;
     return;
   }
@@ -267,9 +265,10 @@ void link_receive(int link, char *data, size_t size)
     linkData[link].recId = header.id;
   }
 
-  memcpy(linkData[link].buffer + linkData[link].size, frame->payload, header.size);
+  size_t payloadSize = size - sizeof(frame_header);
+  memcpy(linkData[link].buffer + linkData[link].size, frame->payload, payloadSize);
   linkData[link].ordering = header.ordering + 1;
-  linkData[link].size += header.size;
+  linkData[link].size += payloadSize;
 
   if (header.isLast && !linkData[link].corrupt) {
     network_receive(link, linkData[link].buffer, linkData[link].size);
@@ -286,12 +285,13 @@ void link_init()
   linkData = malloc((nodeinfo.nlinks + 1) * sizeof(*linkData));
 
   for (int i = 0; i <= nodeinfo.nlinks; i++) {
-    linkData[i].busy     = false;
-    linkData[i].queue    = queue_new();
-    linkData[i].sendId   = 0;
-    linkData[i].corrupt  = false;
-    linkData[i].recId    = 0;
-    linkData[i].ordering = 0;
-    linkData[i].size     = 0;
+    linkData[i].busy           = false;
+    linkData[i].queue          = queue_new();
+    linkData[i].sendId         = 0;
+    linkData[i].maxPayloadSize = linkinfo[i].mtu - sizeof(frame_header);
+    linkData[i].corrupt        = false;
+    linkData[i].recId          = 0;
+    linkData[i].ordering       = 0;
+    linkData[i].size           = 0;
   }
 }

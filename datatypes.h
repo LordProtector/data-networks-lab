@@ -50,7 +50,6 @@ typedef struct
 
 typedef struct
 {
-  uint16_t size;     // length of payload
   uint8_t  id;       // id of datagram
   uint8_t  ordering; // determines position of playload within datagram
   bool     isLast;   // is this the last for this id
@@ -58,9 +57,8 @@ typedef struct
 
 typedef struct
 {
-  uint16_t size;     // length of payload, most significant bit is is_last flag
   uint16_t checksum; // checksum of header
-  uint8_t  id;       // id of datagram
+  uint8_t  id;       // id of datagram, most significant bit is is_last flag
   uint8_t  ordering; // determines position of playload within datagram
 } frame_header;
 
