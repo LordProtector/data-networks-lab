@@ -34,7 +34,7 @@ static EVENT_HANDLER(application_ready)
   size_t length = sizeof(msg);
 
   CHECK(CNET_read_application(&destaddr, msg, &length));
-  //TODO call transport layer
+  transport_transmit(destaddr, msg, length);
 }
 
 /**
@@ -51,7 +51,7 @@ static EVENT_HANDLER(physical_ready)
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
   printf("\t\t\t\tDATA received: %d bytes\n", length);
-  link_receive(msg, length, link);
+  link_receive(link, msg, length);
 }
 
 /**

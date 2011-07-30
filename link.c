@@ -6,6 +6,9 @@
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
+#include "link.h"
+#include "network.h"
+#include "transport.h"
 
 
 /* Constants */
@@ -38,7 +41,12 @@
 /**
  * Used for setting and querieing isLast flag of a frame
  */
-#define IS_LAST 1 << 15
+#define IS_LAST (1 << 15)
+
+/**
+ * Size of an input buffer
+ */
+#define BUFFER_SIZE MAX_DATAGRAM_SIZE
 
 
 /* Macros */
@@ -54,16 +62,16 @@
 /**
  * Represents a link
  */
-typedef struct
+typedef struct link_t
 {
-  bool     busy;     // is the link sending something?
-  QUEUE    queue;    // link's output queue
-  uint8_t  sendId;   // id of current datagram in sending process
-  bool     corrupt;  // is current datagram corrupt
-  uint8_t  recId;    // id of last received frame
-  uint8_t  ordering; // expected ordering of next received frame
-  DATAGRAM buffer;   // input buffer
-  size_t   size;     // how far the buffer is filled
+  bool     busy;                // is the link sending something?
+  QUEUE    queue;               // link's output queue
+  uint8_t  sendId;              // id of current datagram in sending process
+  bool     corrupt;             // is current datagram corrupt
+  uint8_t  recId;               // id of last received frame
+  uint8_t  ordering;            // expected ordering of next received frame
+  char     buffer[BUFFER_SIZE]; // input buffer
+  size_t   size;                // how far the buffer is filled
 } link_t;
 
 typedef unsigned char * buf_t;
@@ -116,9 +124,6 @@ void transmit_frame(int link)
 
   if (queue_nitems(linkData[link].queue)) {
     msg = queue_peek(linkData[link].queue, &length);
-    //~ if (queue_nitems(linkData[link].queues) <= QUEUE_MIN_MSGS) {
-      //~ CNET_enable_application(ALLNODES);
-    //~ }
     int ph_status = CNET_write_physical(link, msg, &length);
     if (ph_status == ER_TOOBUSY) {
       // If link is still busy wait another microsecond
@@ -135,19 +140,24 @@ void transmit_frame(int link)
   } else {
     linkData[link].busy = false;
   }
+
+  // FIXME should be controlled in transport layer
+  if (queue_nitems(linkData[link].queue) <= QUEUE_MIN_MSGS) {
+    CNET_enable_application(ALLNODES);
+  }
 }
 
 
 /* API functions */
 
 /**
- * Sends a datagram over a link.
+ * Sends data over a link.
  *
- * @param datagram Pointer to the data to send.
- * @param size Size of the datagram.
+ * @param data Pointer to the data to send.
+ * @param size Size of the data.
  * @param link The link to send messages over.
  */
-void link_transmit(char *datagram, size_t size, int link)
+void link_transmit(int link, char *data, size_t size)
 {
   FRAME  frame;
   size_t remainingBytes = size;
@@ -159,21 +169,27 @@ void link_transmit(char *datagram, size_t size, int link)
   for (int i = 0; remainingBytes > 0; i++) {
     frame.header.size = MIN(remainingBytes, maxPayloadSize);
     size_t frameSize = sizeof(frame_header) + frame.header.size;
-    if (remainingBytes < maxPayloadSize) {
-      frame.header.size |= IS_LAST;
-    }
     frame.header.ordering = i;
     frame.header.checksum = 0;
-    frame.header.checksum = CNET_crc16((buf_t) &frame, frameSize);
-    memcpy(frame.payload, datagram + processedBytes, frame.header.size);
-
-    queue_add(linkData[link].queue, &frame, frameSize);
+    memcpy(frame.payload, data + processedBytes, frame.header.size);
 
     remainingBytes -= frame.header.size;
     processedBytes += frame.header.size;
+
+    if (remainingBytes == 0) {
+      frame.header.size |= IS_LAST;
+    }
+    frame.header.checksum = CNET_crc16((buf_t) &frame, frameSize);
+
+    queue_add(linkData[link].queue, &frame, frameSize);
   }
 
-  if (linkData[link].busy) {
+  // FIXME should be controlled in transport layer
+  if (queue_nitems(linkData[link].queue) >= QUEUE_MAX_MSGS) {
+    CNET_disable_application(ALLNODES);
+  }
+
+  if (!linkData[link].busy) {
     transmit_frame(link);
   }
 }
@@ -185,7 +201,7 @@ void link_transmit(char *datagram, size_t size, int link)
  * @param size The size of the data.
  * @param link The link the data was received from.
  */
-void link_receive(char *data, size_t size, int link)
+void link_receive(int link, char *data, size_t size)
 {
   FRAME *frame = (FRAME *) data;
   uint16_t checksum = frame->header.checksum;
@@ -212,12 +228,14 @@ void link_receive(char *data, size_t size, int link)
     linkData[link].recId = frame->header.id;
   }
 
+  bool isLast = frame->header.size & IS_LAST;
+  frame->header.size &= IS_LAST ^ UINT16_MAX;
+  memcpy(linkData[link].buffer + linkData[link].size, frame->payload, frame->header.size);
   linkData[link].ordering = frame->header.ordering + 1;
   linkData[link].size += frame->header.size;
-  memcpy(&linkData[link].buffer + linkData[link].size, frame->payload, frame->header.size);
 
-  if (frame->header.size & IS_LAST && !linkData[link].corrupt) {
-    // TODO give datagram to upper layer
+  if (isLast && !linkData[link].corrupt) {
+    network_receive(link, linkData[link].buffer, linkData[link].size);
   }
 }
 
