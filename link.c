@@ -88,6 +88,48 @@ link_t *linkData;
 /* Private functions */
 
 /**
+ * Encodes frame header for effcient transmission.
+ *
+ * @param header The header to encode
+ * @param frame The frame for which the header is to be encoded
+ * @return The complete size of the frame
+ */
+size_t marshal_frame_header(frame_header_simple *header, FRAME *frame)
+{
+  frame->header.size     = header->size;
+  frame->header.id       = header->id;
+  frame->header.ordering = header->ordering;
+  frame->header.checksum = 0;
+  size_t frameSize = sizeof(frame_header) + header->size;
+
+  if (header->isLast) {
+    frame->header.size |= IS_LAST;
+  }
+  frame->header.checksum = CNET_crc16((buf_t) frame, frameSize);
+
+  return frameSize;
+}
+
+/**
+ * Decodes frame header.
+ *
+ * @param header The encoded header
+ * @param frame The frame from which the header is to be decoded
+ * @return Whether decoding was successful
+ */
+bool unmarshal_frame_header(frame_header_simple *header, FRAME *frame)
+{
+  header->size           = frame->header.size & (IS_LAST ^ UINT16_MAX);
+  header->id             = frame->header.id;
+  header->ordering       = frame->header.ordering;
+  header->isLast         = frame->header.size & IS_LAST;
+  uint16_t checksum      = frame->header.checksum;
+  frame->header.checksum = 0;
+
+  return CNET_crc16((buf_t) frame, header->size + sizeof(frame_header)) == checksum;
+}
+
+/**
  * Returns the transmission delay.
  *
  * The transmission delay is the length of the message divided by the bandwidth
@@ -130,7 +172,7 @@ void transmit_frame(int link)
       timeout = 1;
     } else {
       CHECK(ph_status);
-      printf(" DATA transmitted: %d bytes\n", length);
+      //~ printf(" DATA transmitted: %d bytes\n", length);
       msg = queue_remove(linkData[link].queue, &length);
       free(msg);
       timeout = transmission_delay(length, link) + LINK_DELAY;
@@ -160,26 +202,24 @@ void transmit_frame(int link)
 void link_transmit(int link, char *data, size_t size)
 {
   FRAME  frame;
+  frame_header_simple header;
   size_t remainingBytes = size;
   size_t processedBytes = 0;
   size_t maxPayloadSize = linkinfo[link].mtu - sizeof(frame_header);
 
-  frame.header.id = linkData[link].sendId++;
+  header.id = linkData[link].sendId++;
 
   for (int i = 0; remainingBytes > 0; i++) {
-    frame.header.size = MIN(remainingBytes, maxPayloadSize);
-    size_t frameSize = sizeof(frame_header) + frame.header.size;
-    frame.header.ordering = i;
-    frame.header.checksum = 0;
-    memcpy(frame.payload, data + processedBytes, frame.header.size);
+    header.size = MIN(remainingBytes, maxPayloadSize);
+    header.ordering = i;
+    memcpy(frame.payload, data + processedBytes, header.size);
 
-    remainingBytes -= frame.header.size;
-    processedBytes += frame.header.size;
+    remainingBytes -= header.size;
+    processedBytes += header.size;
 
-    if (remainingBytes == 0) {
-      frame.header.size |= IS_LAST;
-    }
-    frame.header.checksum = CNET_crc16((buf_t) &frame, frameSize);
+    header.isLast = !remainingBytes;
+
+    size_t frameSize = marshal_frame_header(&header, &frame);
 
     queue_add(linkData[link].queue, &frame, frameSize);
   }
@@ -204,37 +244,34 @@ void link_transmit(int link, char *data, size_t size)
 void link_receive(int link, char *data, size_t size)
 {
   FRAME *frame = (FRAME *) data;
-  uint16_t checksum = frame->header.checksum;
-  frame->header.checksum = 0;
+  frame_header_simple header;
 
-  if (CNET_crc16((buf_t) frame, size) != checksum) {
+  if (!unmarshal_frame_header(&header, frame)) {
     linkData[link].corrupt = true;
     return;
   }
 
-  if (frame->header.id == linkData[link].recId) {
-    if (linkData[link].corrupt || frame->header.ordering != linkData[link].ordering) {
+  if (header.id == linkData[link].recId) {
+    if (linkData[link].corrupt || header.ordering != linkData[link].ordering) {
       linkData[link].corrupt = true;
       return;
     }
   } else {
-    if (frame->header.ordering == 0) {
+    if (header.ordering == 0) {
       linkData[link].corrupt = false;
       linkData[link].size = 0;
     } else {
       linkData[link].corrupt = true;
       return;
     }
-    linkData[link].recId = frame->header.id;
+    linkData[link].recId = header.id;
   }
 
-  bool isLast = frame->header.size & IS_LAST;
-  frame->header.size &= IS_LAST ^ UINT16_MAX;
-  memcpy(linkData[link].buffer + linkData[link].size, frame->payload, frame->header.size);
-  linkData[link].ordering = frame->header.ordering + 1;
-  linkData[link].size += frame->header.size;
+  memcpy(linkData[link].buffer + linkData[link].size, frame->payload, header.size);
+  linkData[link].ordering = header.ordering + 1;
+  linkData[link].size += header.size;
 
-  if (isLast && !linkData[link].corrupt) {
+  if (header.isLast && !linkData[link].corrupt) {
     network_receive(link, linkData[link].buffer, linkData[link].size);
   }
 }
