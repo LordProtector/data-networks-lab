@@ -38,7 +38,7 @@ typedef struct
   uint8_t srcaddr;  // 0 - 255
   uint8_t destaddr;
   uint8_t hoplimit; // time to live
-  bool rotuing_flag; // 1 = routing protocol, 0 = network protocol
+  bool    routing;	// 1 = routing protocol, 0 = network protocol
 } datagram_header;
 
 typedef struct
