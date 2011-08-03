@@ -63,7 +63,7 @@ static EVENT_HANDLER(physical_ready)
  */
 static EVENT_HANDLER(link_ready)
 {
-  transmit_frame(data); // data keeps the link
+  transmit_frame(data); // data = link (to send over)
 }
 
 /**
