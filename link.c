@@ -3,6 +3,7 @@
 /* include headers */
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
@@ -36,7 +37,7 @@
 /**
  * Minimal length of queues.
  */
-#define QUEUE_MIN_MSGS 10
+#define QUEUE_MIN_MSGS (QUEUE_MAX_MSGS / 2)
 
 /**
  * Used for setting and querieing isLast flag of a frame
@@ -92,6 +93,7 @@ link_t *linkData;
 
 /**
  * Encodes frame header for effcient transmission.
+ * Adds computed checksum.
  *
  * @param header The header to encode
  * @param frame The frame for which the header is to be encoded
@@ -106,11 +108,13 @@ void marshal_frame_header(frame_header_simple *header, FRAME *frame, size_t size
   if (header->isLast) {
     frame->header.id |= IS_LAST;
   }
+	//TODO: compute checksum on header only, if error correction is implemented
   frame->header.checksum = CNET_crc16((buf_t) frame, size);
 }
 
 /**
  * Decodes frame header.
+ * Checks checksum. 
  *
  * @param header The decoded header
  * @param frame The frame from which the header is to be decoded
@@ -192,6 +196,7 @@ void transmit_frame(int link)
 
 /**
  * Sends data over a link.
+ * Splits data into several frames if neccessary.
  *
  * @param data Pointer to the data to send.
  * @param size Size of the data.
@@ -206,6 +211,7 @@ void link_transmit(int link, char *data, size_t size)
 
   header.id = linkData[link].sendId++ % FRAME_ID_LIMIT;
 
+  /* split datagram into several frames */
   for (int i = 0; remainingBytes > 0; i++) {
     size_t payloadSize = MIN(remainingBytes, linkData[link].maxPayloadSize);
     header.ordering = i;
@@ -227,6 +233,7 @@ void link_transmit(int link, char *data, size_t size)
     CNET_disable_application(ALLNODES);
   }
 
+	/* send frame when timer not running (initial sending) */
   if (!linkData[link].busy) {
     transmit_frame(link);
   }
@@ -254,7 +261,10 @@ void link_receive(int link, char *data, size_t size)
       linkData[link].corrupt = true;
       return;
     }
-  } else {
+  } else { //new datagram
+    linkData[link].recId = header.id;
+
+		/* first frame has ordering = 0 */
     if (header.ordering == 0) {
       linkData[link].corrupt = false;
       linkData[link].size = 0;
@@ -262,10 +272,10 @@ void link_receive(int link, char *data, size_t size)
       linkData[link].corrupt = true;
       return;
     }
-    linkData[link].recId = header.id;
   }
 
   size_t payloadSize = size - sizeof(frame_header);
+	assert(linkData[link].size + payloadSize <= BUFFER_SIZE);
   memcpy(linkData[link].buffer + linkData[link].size, frame->payload, payloadSize);
   linkData[link].ordering = header.ordering + 1;
   linkData[link].size += payloadSize;
