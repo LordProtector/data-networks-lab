@@ -14,7 +14,7 @@
 /* Constants */
 
 /**
- * Muliply a second with this constant to get a microsecond.
+ * Multiply a second with this constant to get a microsecond.
  */
 #define MICRO 0.000001
 
@@ -39,7 +39,7 @@
 #define QUEUE_MIN_MSGS 10
 
 /**
- * Used for setting and querieing isLast flag of a frame
+ * Used for setting and querying isLast flag of a frame
  */
 #define IS_LAST (1 << 7)
 
@@ -91,11 +91,10 @@ link_t *linkData;
 /* Private functions */
 
 /**
- * Encodes frame header for effcient transmission.
+ * Encodes frame header for efficient transmission.
  *
  * @param header The header to encode
  * @param frame The frame for which the header is to be encoded
- * @return The complete size of the frame
  */
 void marshal_frame_header(frame_header_simple *header, FRAME *frame, size_t size)
 {
@@ -133,9 +132,9 @@ bool unmarshal_frame_header(frame_header_simple *header, FRAME *frame, size_t si
  * The transmission delay is the length of the message divided by the bandwidth
  * of the link.
  *
- * @param Length the length of the message.
- * @param Link the link to send the message over.
- * @return Returns the calculated transmission delay.
+ * @param length The length of the message.
+ * @param link The link to send the message over.
+ * @return The calculated transmission delay.
  */
 double transmission_delay(size_t length, int link)
 {
