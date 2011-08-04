@@ -6,9 +6,22 @@
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
-#include "link.h"
 #include "network.h"
 #include "transport.h"
+#include "bitmap.h"
+#include "buffer.h"
+
+typedef struct
+{
+  BUFFER buf;
+  BITMAP bm;
+  VECTOR lasts;
+  size_t ackOffset; // first byte of first incomplete message
+  //TODO sender side
+} CONNECTION;
+
+// a new entry is added whenever message from/to previously unknown host arrives
+HASHTABLE connections; // host address -> CONNECTION
 
 void transport_transmit(CnetAddr addr, char *data, size_t size)
 {
@@ -24,5 +37,6 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 void transport_init()
 {
+  connections = hashtable_new(0);
   //TODO init
 }

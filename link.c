@@ -9,7 +9,6 @@
 #include "datatypes.h"
 #include "link.h"
 #include "network.h"
-#include "transport.h"
 
 
 /* Constants */
@@ -49,13 +48,16 @@
  */
 #define BUFFER_SIZE MAX_DATAGRAM_SIZE
 
-#define FRAME_ID_LIMIT (UINT8_MAX >> 2)
+/**
+ * The largest allowed id for frames
+ */
+#define FRAME_ID_LIMIT (UINT8_MAX >> 1)
 
 
 /* Macros */
 
 /**
- * Computes the bigger of two numbers
+ * Computes the smaller of two numbers
  */
 #define MIN(a,b) (a < b ? a : b);
 

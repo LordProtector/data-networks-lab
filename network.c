@@ -29,15 +29,15 @@ void network_transmit(CnetAddr addr, char *data, size_t size)
 	/* lookup link in forwarding_table */
 	char key[5];
 	int2string(key, addr);
-	int link = *((int*) hashtable_find(forwarding_table, key, NULL)); 
-  
+	int link = *((int*) hashtable_find(forwarding_table, key, NULL));
+
 	/* datagram header */
 	datagram_header header;
 	header.srcaddr = nodeinfo.address;
 	header.destaddr = addr;
 	header.hoplimit = HOP_LIMIT;
 	header.routing = false;
-	
+
 	/* assemble datagram */
 	DATAGRAM datagram;
   datagram.header = header;
@@ -50,7 +50,7 @@ void network_transmit(CnetAddr addr, char *data, size_t size)
 
 /**
  * Takes a datagram and checks its destination.
- * Either unpacks segment from the datagram and hands it to the upper layer 
+ * Either unpacks segment from the datagram and hands it to the upper layer
  * or forwards the datagram to the next hop (on the route to its destination).
  * @param link Link which received the datagram.
  * @param data The received datagram.
@@ -60,8 +60,8 @@ void network_receive(int link, char *data, size_t size)
 {
 	DATAGRAM *datagram = (DATAGRAM*) data;
 	CnetAddr srcaddr = datagram->header.srcaddr;
-	CnetAddr destaddr = datagram->header.destaddr;	
-	
+	CnetAddr destaddr = datagram->header.destaddr;
+
 	if(0 >= datagram->header.hoplimit)
 		return; //hoplimit exceeded
 
@@ -77,8 +77,8 @@ void network_receive(int link, char *data, size_t size)
 		/* datagram destination = foreign node -> forward */
 		char key[5];
 		int2string(key, destaddr);
-		int link = *((int*) hashtable_find(forwarding_table, key, NULL)); 
-  	
+		int link = *((int*) hashtable_find(forwarding_table, key, NULL));
+
 		datagram->header.hoplimit--;
 		link_transmit(link, (char*) datagram, size);
 	}
@@ -92,14 +92,11 @@ void network_init()
 	#define HOM 96
 	#define SLS 182
 
-  
 	/* static forwarding_table creation */
 	char key[5];
 	int* one = malloc(sizeof(one)); *one = 1;
 	int* two = malloc(sizeof(two)); *two = 2;
 
-	int2string(key, 111);
-	
 	switch(nodeinfo.address) {
 	case SB:
 		int2string(key, HOM);	hashtable_add(forwarding_table, key, one, sizeof(int));
@@ -107,9 +104,11 @@ void network_init()
 		break;
 	case HOM:
 		int2string(key, SB);	hashtable_add(forwarding_table, key, one, sizeof(int));
+    int2string(key, SLS);	hashtable_add(forwarding_table, key, one, sizeof(int));
 		break;
 	case SLS:
 		int2string(key, SB);	hashtable_add(forwarding_table, key, one, sizeof(int));
+    int2string(key, HOM);	hashtable_add(forwarding_table, key, one, sizeof(int));
 		break;
 	}
 }
