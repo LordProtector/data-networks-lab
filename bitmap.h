@@ -27,6 +27,6 @@ bool bitmap_check(BITMAP b, size_t pos);
 
 bool bitmap_check_range(BITMAP b, size_t pos, size_t len);
 
-size_t bitmap_find_next_unset_bit(BITMAP b, size_t pos);
+size_t bitmap_next_unset(BITMAP b, size_t pos);
 
 #endif

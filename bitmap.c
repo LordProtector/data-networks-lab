@@ -177,7 +177,7 @@ bool bitmap_check_range(BITMAP b, size_t pos, size_t len)
   size_t end = pos + len;
 
   for (i = pos; i < end; i++) {
-    if (!bitmap_get(b, i)) {
+    if (!bitmap_check(b, i)) {
       return false;
     }
   }
@@ -193,16 +193,17 @@ bool bitmap_check_range(BITMAP b, size_t pos, size_t len)
  * @param len Number of bits to check
  * @return position of first unset bit, beginning at pos
  */
-size_t bitmap_find_next_unset_bit(BITMAP b, size_t pos)
+size_t bitmap_next_unset(BITMAP b, size_t pos)
 {
+  _BITMAP *bitmap = (_BITMAP *)b;
 	size_t i;
-	size_t end = bitmap->len;
-	
+	size_t end = pos + bitmap->len;
+
 	for (i = pos; i < end; i++) {
-		if (!bitmap_get(b, i)) {
+		if (!bitmap_check(b, i)) {
 			break;
 		}
 	}
-	
-	return i;
+
+	return i;  //FIXME What to return, if all bits are set?
 }
