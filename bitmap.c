@@ -206,4 +206,5 @@ size_t bitmap_next_unset(BITMAP b, size_t pos)
 	}
 
 	return i;  //FIXME What to return, if all bits are set?
+	//either -1 or i+1, we should discuss what is better
 }
