@@ -184,3 +184,25 @@ bool bitmap_check_range(BITMAP b, size_t pos, size_t len)
 
   return true;
 }
+
+/**
+ * Returns position of first unset bit, beginning at pos
+ *
+ * @param b Handle of bitmap
+ * @param pos Position of first bit to check
+ * @param len Number of bits to check
+ * @return position of first unset bit, beginning at pos
+ */
+size_t bitmap_find_next_unset_bit(BITMAP b, size_t pos)
+{
+	size_t i;
+	size_t end = bitmap->len;
+	
+	for (i = pos; i < end; i++) {
+		if (!bitmap_get(b, i)) {
+			break;
+		}
+	}
+	
+	return i;
+}
