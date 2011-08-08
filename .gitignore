@@ -1,2 +1,6 @@
 *.o
 *.cnet
+*~
+tmp/
+notes/
+analyze/build
