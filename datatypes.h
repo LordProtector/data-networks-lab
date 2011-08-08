@@ -19,8 +19,9 @@ typedef struct
 
 typedef struct
 {
-  uint16_t id;     // seqguence number of segment / also encodes is_first flag
-  uint16_t ackid;  // sequence number of last continuosly received segment
+  uint16_t offset;     // sequence number of segment
+  uint16_t ackOffset;  // sequence number last continuously received segment + 1
+  bool     isLast;     // last segment of a message
 } segment_header;
 
 typedef struct
@@ -36,7 +37,8 @@ typedef struct
 {
   uint8_t srcaddr;  // 0 - 255
   uint8_t destaddr;
-  uint8_t hoplimit; // time to live + routing flag: 1 = routing protocol, 0 = network protocol
+  uint8_t hoplimit; // time to live
+  bool    routing;	// 1 = routing protocol, 0 = network protocol
 } datagram_header;
 
 typedef struct
@@ -51,20 +53,20 @@ typedef struct
 typedef struct
 {
   uint8_t  id;       // id of datagram
-  uint8_t  ordering; // determines position of playload within datagram
+  uint8_t  ordering; // determines position of payload within datagram
   bool     isLast;   // is this the last for this id
-} frame_header_simple;
-
-typedef struct
-{
-  uint16_t checksum; // checksum of header
-  uint8_t  id;       // id of datagram, most significant bit is is_last flag
-  uint8_t  ordering; // determines position of playload within datagram
 } frame_header;
 
 typedef struct
 {
-  frame_header header;
+  uint16_t checksum;  // checksum of header
+  uint8_t  id_isLast; // id of datagram, most significant bit is is_last flag
+  uint8_t  ordering;  // determines position of payload within datagram
+} marshaled_frame_header;
+
+typedef struct
+{
+  marshaled_frame_header header;
   char payload[MAX_DATAGRAM_SIZE];
 } FRAME;
 

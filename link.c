@@ -9,13 +9,12 @@
 #include "datatypes.h"
 #include "link.h"
 #include "network.h"
-#include "transport.h"
 
 
 /* Constants */
 
 /**
- * Muliply a second with this constant to get a microsecond.
+ * Multiply a second with this constant to get a microsecond.
  */
 #define MICRO 0.000001
 
@@ -40,7 +39,7 @@
 #define QUEUE_MIN_MSGS (QUEUE_MAX_MSGS / 2)
 
 /**
- * Used for setting and querieing isLast flag of a frame
+ * Used for setting and querying isLast flag of a frame
  */
 #define IS_LAST (1 << 7)
 
@@ -49,13 +48,16 @@
  */
 #define BUFFER_SIZE MAX_DATAGRAM_SIZE
 
-#define FRAME_ID_LIMIT (UINT8_MAX >> 2)
+/**
+ * The largest allowed id for frames
+ */
+#define FRAME_ID_LIMIT (UINT8_MAX >> 1)
 
 
 /* Macros */
 
 /**
- * Computes the bigger of two numbers
+ * Computes the smaller of two numbers
  */
 #define MIN(a,b) (a < b ? a : b);
 
@@ -92,43 +94,84 @@ link_t *linkData;
 /* Private functions */
 
 /**
- * Encodes frame header for effcient transmission.
- * Adds computed checksum.
+ * Encodes payload, such that some error correction is possible.
+ * Returns size of encoded payload.
  *
- * @param header The header to encode
- * @param frame The frame for which the header is to be encoded
- * @return The complete size of the frame
+ * @param frame Frame where the encoded payload shall be placed
+ * @param payload The payload to encode
+ * @param size Size of the payload
+ * @return Size of encoded payload
  */
-void marshal_frame_header(frame_header_simple *header, FRAME *frame, size_t size)
+size_t encode_payload(FRAME *frame, char *payload, size_t size)
 {
-  frame->header.id       = header->id;
-  frame->header.ordering = header->ordering;
-  frame->header.checksum = 0;
+  //FIXME dummy function
+  memcpy(frame->payload, payload, size);
 
-  if (header->isLast) {
-    frame->header.id |= IS_LAST;
-  }
-	//TODO: compute checksum on header only, if error correction is implemented
-  frame->header.checksum = CNET_crc16((buf_t) frame, size);
+  return size;
 }
 
 /**
- * Decodes frame header.
- * Checks checksum. 
+ * Decodes payload from frame.
+ * Returns size of encoded payload or 0 if correction fails.
  *
- * @param header The decoded header
- * @param frame The frame from which the header is to be decoded
- * @return Whether decoding was successful
+ * @param frame The frame from which the payload is to be decoded
+ * @param payload Position where the decoded payload is to be stored
+ * @param size Size of the decoded payload
+ * @return Size of decoded payload or 0 if decoding fails
  */
-bool unmarshal_frame_header(frame_header_simple *header, FRAME *frame, size_t size)
+size_t decode_payload(FRAME *frame, char *payload, size_t size)
 {
-  header->id             = frame->header.id & (IS_LAST ^ UINT8_MAX);
+  //FIXME dummy function
+  memcpy(payload, frame->payload, size);
+
+  return size;
+}
+
+/**
+ * Marshals frame for efficient transmission.
+ * Adds computed checksum.
+ *
+ * @param header The header to encode
+ * @param frame The marshaled frame
+ * @return Size of the frame
+ */
+size_t marshal_frame(FRAME *frame, frame_header *header, char* payload, size_t size)
+{
+  frame->header.id_isLast = header->id;
+  frame->header.ordering  = header->ordering;
+  frame->header.checksum  = 0;
+  size_t frameSize = encode_payload(frame, payload, size) + sizeof(marshaled_frame_header);
+
+  if (header->isLast) {
+    frame->header.id_isLast |= IS_LAST;
+  }
+	//TODO: compute checksum on header only, if error correction is implemented
+  frame->header.checksum = CNET_crc16((buf_t) frame, frameSize);
+
+  return frameSize;
+}
+
+/**
+ * Unmarshals frame.
+ * Checks checksum.
+ *
+ * @param header The unmarshaled header
+ * @param frame The frame from which the header is to be unmarshaled
+ * @return Size of payload or 0 in case of uncorrectable error
+ */
+size_t unmarshal_frame(FRAME *frame, frame_header *header, char *payload, size_t size)
+{
+  header->id             = frame->header.id_isLast & (IS_LAST ^ UINT8_MAX);
   header->ordering       = frame->header.ordering;
-  header->isLast         = frame->header.id & IS_LAST;
+  header->isLast         = frame->header.id_isLast & IS_LAST;
   uint16_t checksum      = frame->header.checksum;
   frame->header.checksum = 0;
 
-  return CNET_crc16((buf_t) frame, size) == checksum;
+  if (CNET_crc16((buf_t) frame, size) == checksum) {
+    return decode_payload(frame, payload, size - sizeof(marshaled_frame_header));
+  } else {
+    return 0;
+  }
 }
 
 /**
@@ -137,9 +180,9 @@ bool unmarshal_frame_header(frame_header_simple *header, FRAME *frame, size_t si
  * The transmission delay is the length of the message divided by the bandwidth
  * of the link.
  *
- * @param Length the length of the message.
- * @param Link the link to send the message over.
- * @return Returns the calculated transmission delay.
+ * @param length The length of the message.
+ * @param link The link to send the message over.
+ * @return The calculated transmission delay.
  */
 double transmission_delay(size_t length, int link)
 {
@@ -204,8 +247,8 @@ void transmit_frame(int link)
  */
 void link_transmit(int link, char *data, size_t size)
 {
-  FRAME  frame;
-  frame_header_simple header;
+  FRAME frame;
+  frame_header header;
   size_t remainingBytes = size;
   size_t processedBytes = 0;
 
@@ -215,15 +258,12 @@ void link_transmit(int link, char *data, size_t size)
   for (int i = 0; remainingBytes > 0; i++) {
     size_t payloadSize = MIN(remainingBytes, linkData[link].maxPayloadSize);
     header.ordering = i;
-    memcpy(frame.payload, data + processedBytes, payloadSize);
+    header.isLast   = remainingBytes == payloadSize;
+
+    size_t frameSize = marshal_frame(&frame, &header, data + processedBytes, payloadSize);
 
     remainingBytes  -= payloadSize;
     processedBytes  += payloadSize;
-    size_t frameSize = payloadSize + sizeof(frame_header);
-
-    header.isLast = !remainingBytes;
-
-    marshal_frame_header(&header, &frame, frameSize);
 
     queue_add(linkData[link].queue, &frame, frameSize);
   }
@@ -249,9 +289,11 @@ void link_transmit(int link, char *data, size_t size)
 void link_receive(int link, char *data, size_t size)
 {
   FRAME *frame = (FRAME *) data;
-  frame_header_simple header;
+  frame_header header;
+  char payload[size];
+  size_t payloadSize = unmarshal_frame(frame, &header, payload, size);
 
-  if (!unmarshal_frame_header(&header, frame, size)) {
+  if (!payloadSize) {
     linkData[link].corrupt = true;
     return;
   }
@@ -274,9 +316,8 @@ void link_receive(int link, char *data, size_t size)
     }
   }
 
-  size_t payloadSize = size - sizeof(frame_header);
 	assert(linkData[link].size + payloadSize <= BUFFER_SIZE);
-  memcpy(linkData[link].buffer + linkData[link].size, frame->payload, payloadSize);
+  memcpy(linkData[link].buffer + linkData[link].size, payload, payloadSize);
   linkData[link].ordering = header.ordering + 1;
   linkData[link].size += payloadSize;
 
@@ -298,7 +339,7 @@ void link_init()
     linkData[i].busy           = false;
     linkData[i].queue          = queue_new();
     linkData[i].sendId         = 0;
-    linkData[i].maxPayloadSize = linkinfo[i].mtu - sizeof(frame_header);
+    linkData[i].maxPayloadSize = linkinfo[i].mtu - sizeof(marshaled_frame_header);
     linkData[i].corrupt        = false;
     linkData[i].recId          = 0;
     linkData[i].ordering       = 0;
