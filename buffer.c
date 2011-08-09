@@ -1,13 +1,20 @@
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
-#include <stdio.h>
 #include "buffer.h"
 
 typedef struct _BUFFER
 {
-  size_t len;
-  char *data;
+	size_t  len;
+	char    *data;
+	uint8_t *bitmap;
 } _BUFFER;
+
+void buffer_validate(BUFFER b, size_t pos);
+void buffer_validate_range(BUFFER b, size_t pos, size_t len);
+void buffer_invalidate(BUFFER b, size_t pos);
+void buffer_invalidate_range(BUFFER b, size_t pos, size_t len);
 
 /**
  * Creates a new circular buffer and returns a handle for it.
@@ -19,8 +26,9 @@ BUFFER buffer_new(size_t len)
 {
   _BUFFER *buf = malloc(sizeof(*buf));
 
-  buf->len = len;
-  buf->data = malloc(len);
+	buf->len    = len;
+	buf->data   = malloc(len);
+	buf->bitmap = calloc(len / 8 + 1, sizeof(*buf->bitmap));
 
   return (BUFFER) buf;
 }
@@ -36,6 +44,7 @@ void buffer_free(BUFFER b)
   _BUFFER *buf = (_BUFFER *)b;
 
   free(buf->data);
+	free(buf->bitmap);
   free(buf);
 }
 
@@ -60,6 +69,8 @@ void buffer_store(BUFFER b, size_t pos, char *data, size_t size)
     memcpy(buf->data + pos, data, size - wrapping);
     memcpy(buf->data, data + size - wrapping, wrapping);
   }
+
+	buffer_validate_range(b, pos, size);
 }
 
 /**
@@ -83,4 +94,139 @@ void buffer_load(BUFFER b, size_t pos, char *data, size_t size)
     memcpy(data, buf->data + pos, size - wrapping);
     memcpy(data + size - wrapping, buf->data, wrapping);
   }
+
+	buffer_invalidate_range(b, pos, size);
+}
+
+/**
+ * Validates byte at position 'pos' of buffer 'b'.
+ *
+ * @param b Handle of buffer
+ * @param pos Position of bit to set
+ */
+void buffer_validate(BUFFER b, size_t pos)
+{
+	_BUFFER *buf = (_BUFFER *)b;
+
+	pos %= buf->len;
+	size_t byte  = pos / 8;
+	uint8_t mask = 1 << (pos % 8);
+
+	buf->bitmap[byte] |= mask;
+}
+
+/**
+ * Validates 'len' bytes from position 'pos' of buffer 'b' on.
+ *
+ * @param b Handle of buffer
+ * @param pos Position of first byte to validate
+ * @param len Number of bytes to validate
+ */
+void buffer_validate_range(BUFFER b, size_t pos, size_t len)
+{
+	size_t i;
+	size_t end = pos + len;
+
+	for (i = pos; i < end; i++) {
+		buffer_validate(b, i);
+	}
+}
+
+/**
+ * Clears byte at position 'pos' of buffer 'b'.
+ *
+ * @param b Handle of buffer
+ * @param pos Position of byte to invalidate
+ */
+void buffer_invalidate(BUFFER b, size_t pos)
+{
+	_BUFFER *buf = (_BUFFER *)b;
+
+	pos %= buf->len;
+	size_t byte  = pos / 8;
+	uint8_t mask = 1 << (pos % 8);
+
+	if (buf->bitmap[byte] | mask) {
+		buf->bitmap[byte] ^= mask;
+	}
+}
+
+/**
+ * Invalidates 'len' bytes from position 'pos' of buffer 'b' on.
+ *
+ * @param b Handle of buffer
+ * @param pos Position of first bit to invalidate
+ * @param len Number of bytes to invalidate
+ */
+void buffer_invalidate_range(BUFFER b, size_t pos, size_t len)
+{
+	size_t i;
+	size_t end = pos + len;
+
+	for (i = pos; i < end; i++) {
+		buffer_invalidate(b, i);
+	}
+}
+
+/**
+ * Checks whether byte at position 'pos' of bitmap 'b' is valid.
+ *
+ * @param b Handle of buffer
+ * @param pos Position of byte to check
+ * @return Whether the requested byte is valid
+ */
+bool buffer_check(BUFFER b, size_t pos)
+{
+	_BUFFER *buf = (_BUFFER *)b;
+
+	pos %= buf->len;
+	size_t byte  = pos / 8;
+	uint8_t mask = 1 << (pos % 8);
+
+	return buf->bitmap[byte] & mask;
+}
+
+/**
+ * Checks whether 'len' continuous bytes from position 'pos' on are valid.
+ *
+ * @param b Handle of buffer
+ * @param pos Position of first byte to check
+ * @param len Number of bytes to check
+ * @return Whether bytes are valid
+ */
+bool buffer_check_range(BUFFER b, size_t pos, size_t len)
+{
+	size_t i;
+	size_t end = pos + len;
+
+	for (i = pos; i < end; i++) {
+		if (!buffer_check(b, i)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Returns position of invalid unset byte, beginning at pos
+ *
+ * @param b Handle of buffer
+ * @param pos Position of first byte to check
+ * @return Position of first invalid byte, beginning at pos
+ */
+size_t buffer_next_invalid(BUFFER b, size_t pos)
+{
+	_BUFFER *buf = (_BUFFER *)b;
+	size_t i;
+	size_t end = pos + buf->len;
+
+	for (i = pos; i < end; i++) {
+		if (!buffer_check(b, i)) {
+			break;
+		}
+	}
+
+	return i;  //FIXME What to return, if all bits are set?
+	//either -1 or i+1, we should discuss what is better
 }

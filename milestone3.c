@@ -15,12 +15,19 @@
 #include "transport.c"
 #include "network.c"
 #include "link.c"
+#include "squeue.c"
+#include "buffer.c"
 
 /**
  * Message of MAX_MESSAGE_SIZE.
  */
 char msg[MAX_MESSAGE_SIZE];
 
+
+void int2string(char* s, int i)
+{
+	sprintf(s, "%d", i);
+}
 
 /**
  * aplication_ready() event-handler.
@@ -59,11 +66,23 @@ static EVENT_HANDLER(physical_ready)
  *
  * It is called whenever a timeout indicating complete transmission of
  * a message occurs, which means the link is not busy any more.
- * It calls <code>transmit()</code>.
+ * It calls <code>transmit_frame()</code>.
  */
 static EVENT_HANDLER(link_ready)
 {
   transmit_frame(data); // data = link (to send over)
+}
+
+/**
+ * transport_timeout() event-handler.
+ *
+ * It is called whenever a timeout indicating loss of a segment occurs,
+ * which means it should be retransmitted.
+ * It calls <code>transmit_segment()</code>.
+ */
+static EVENT_HANDLER(transport_timeout)
+{
+  transmit_segment((void *)data); // data = pointer to OUT_SEGMENT
 }
 
 /**
@@ -74,12 +93,13 @@ static EVENT_HANDLER(link_ready)
  */
 EVENT_HANDLER(reboot_node)
 {
-    CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
-    CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
-    CHECK(CNET_set_handler(EV_TIMER1,           link_ready, 0));
+	CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
+	CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
+	CHECK(CNET_set_handler(LINK_TIMER,          link_ready, 0));
+	CHECK(CNET_set_handler(TRANSPORT_TIMER,     transport_timeout, 0));
 
-    link_init();
-    network_init();
-    transport_init();
-    CNET_enable_application(ALLNODES);
+	link_init();
+	network_init();
+	transport_init();
+	CNET_enable_application(ALLNODES);
 }

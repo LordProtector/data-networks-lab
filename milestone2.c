@@ -12,8 +12,7 @@
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
-#include "transport.c"
-#include "network.c"
+#include "network.h"
 #include "link.c"
 
 /**
@@ -21,6 +20,11 @@
  */
 char msg[MAX_MESSAGE_SIZE];
 
+/** Emulates a network layer for the link layer */
+void network_receive(int link, char *data, size_t size)
+{
+	CHECK(CNET_write_application(data, &size));
+}
 
 /**
  * aplication_ready() event-handler.
@@ -34,7 +38,7 @@ static EVENT_HANDLER(application_ready)
   size_t length = sizeof(msg);
 
   CHECK(CNET_read_application(&destaddr, msg, &length));
-  transport_transmit(destaddr, msg, length);
+  link_transmit(1, msg, length);
 }
 
 /**
@@ -50,7 +54,6 @@ static EVENT_HANDLER(physical_ready)
 
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
-  //~ printf("\t\t\t\tDATA received: %d bytes\n", length);
   link_receive(link, msg, length);
 }
 
@@ -74,13 +77,11 @@ static EVENT_HANDLER(link_ready)
  */
 EVENT_HANDLER(reboot_node)
 {
-    CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
-    CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
-    CHECK(CNET_set_handler(EV_TIMER1,           link_ready, 0));
+	CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
+	CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
+	CHECK(CNET_set_handler(EV_TIMER1,           link_ready, 0));
 
-    link_init();
-    network_init();
-    transport_init();
-    CNET_enable_application(ALLNODES);
+	link_init();
+	CNET_enable_application(ALLNODES);
 }
 

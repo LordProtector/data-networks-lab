@@ -54,14 +54,6 @@
 #define FRAME_ID_LIMIT (UINT8_MAX >> 1)
 
 
-/* Macros */
-
-/**
- * Computes the smaller of two numbers
- */
-#define MIN(a,b) (a < b ? a : b);
-
-
 /* Structs */
 
 /**
@@ -133,6 +125,8 @@ size_t decode_payload(FRAME *frame, char *payload, size_t size)
  *
  * @param header The header to encode
  * @param frame The marshaled frame
+ * @param payload Payload for the frame
+ * @param size Size of payload
  * @return Size of the frame
  */
 size_t marshal_frame(FRAME *frame, frame_header *header, char* payload, size_t size)
@@ -157,6 +151,8 @@ size_t marshal_frame(FRAME *frame, frame_header *header, char* payload, size_t s
  *
  * @param header The unmarshaled header
  * @param frame The frame from which the header is to be unmarshaled
+ * @param payload Where to store the frames decoded payload
+ * @param size Size of frame
  * @return Size of payload or 0 in case of uncorrectable error
  */
 size_t unmarshal_frame(FRAME *frame, frame_header *header, char *payload, size_t size)
@@ -222,7 +218,7 @@ void transmit_frame(int link)
       free(msg);
       timeout = transmission_delay(length, link) + LINK_DELAY;
     }
-    CNET_start_timer(EV_TIMER1, timeout, link);
+    CNET_start_timer(LINK_TIMER, timeout, link);
     linkData[link].busy = true;
   } else {
     linkData[link].busy = false;

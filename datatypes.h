@@ -6,6 +6,14 @@
 #define MAX_SEGMENT_SIZE  sizeof(SEGMENT)
 #define MAX_DATAGRAM_SIZE sizeof(DATAGRAM)
 
+#define LINK_TIMER EV_TIMER1
+#define TRANSPORT_TIMER EV_TIMER2
+
+/**
+ * Computes the smaller of two numbers
+ */
+#define MIN(a,b) (a < b ? a : b);
+
 /* Data structures for application layer */
 
 typedef struct
@@ -26,7 +34,13 @@ typedef struct
 
 typedef struct
 {
-  segment_header header;
+  uint16_t offset;     // sequence number of segment + isLast
+  uint16_t ackOffset;  // sequence number last continuously received segment + 1
+} marshaled_segment_header;
+
+typedef struct
+{
+  marshaled_segment_header header;
   char payload[MAX_MESSAGE_SIZE];
 } SEGMENT;
 
@@ -69,5 +83,7 @@ typedef struct
   marshaled_frame_header header;
   char payload[MAX_DATAGRAM_SIZE];
 } FRAME;
+
+void int2string(char* s, int i);
 
 #endif

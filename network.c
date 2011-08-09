@@ -112,7 +112,3 @@ void network_init()
 		break;
 	}
 }
-
-void int2string(char* s, int i) {
-	sprintf(s, "%d", i);
-}
