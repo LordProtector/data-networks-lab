@@ -111,7 +111,8 @@ void transmit_segments(CnetAddr addr)
 	CONNECTION *con = hashtable_find(connections, key, NULL);
 	assert(con != NULL);
 
-	while (con->numSentSegments < con->windowSize) {
+	while (con->numSentSegments < con->windowSize &&
+				 con->numSentSegments < vector_nitems(con->outSegments)) {
 		size_t size;
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, &size);
 		transmit_segment(outSeg);
