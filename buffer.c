@@ -112,6 +112,7 @@ void buffer_validate(BUFFER b, size_t pos)
 	size_t byte  = pos / 8;
 	uint8_t mask = 1 << (pos % 8);
 
+  assert(!(buf->bitmap[byte] & mask)); //do not overwrite valid data
 	buf->bitmap[byte] |= mask;
 }
 

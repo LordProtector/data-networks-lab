@@ -101,7 +101,7 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 void transmit_segment(OUT_SEGMENT *outSeg)
 {
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, TRANSPORT_TIMEOUT, (int) outSeg);
+	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, TRANSPORT_TIMEOUT, (CnetData) outSeg);
 }
 
 void transmit_segments(CnetAddr addr)
@@ -111,6 +111,7 @@ void transmit_segments(CnetAddr addr)
 	CONNECTION *con = hashtable_find(connections, key, NULL);
 	assert(con != NULL);
 
+  //window not saturated and segments available
 	while (con->numSentSegments < con->windowSize &&
 				 con->numSentSegments < vector_nitems(con->outSegments)) {
 		size_t size;
@@ -121,6 +122,7 @@ void transmit_segments(CnetAddr addr)
 	//TODO flow/congestion control
 }
 
+//takes one message, splits it into segments and adds them to outgoing queue and triggers sending of segments 
 void transport_transmit(CnetAddr addr, char *data, size_t size)
 {
 	char key[5];
@@ -138,6 +140,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 
 	/* split message into several segments */
 	for (int i = 0; remainingBytes > 0; i++) {
+		assert(remainingBytes + processedBytes == size);
 		size_t payloadSize = MIN(remainingBytes, SEGMENT_SIZE);
 		header.offset    = con->nextOffset;
 		header.ackOffset = con->recAckOffset;
