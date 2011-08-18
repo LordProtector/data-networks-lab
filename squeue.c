@@ -1,27 +1,48 @@
+/**
+ * squeue.c
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Implementation of a sorted queue. It has the ability to add elements to
+ * the queue in a numerically sorted way. Small elements are at the head of
+ * the queue and large elements are at the end. Insertion can be done in O(n)
+ * where n is the number of elements so far in the queue. Getting the lowest
+ * and the largest element of the queue can be done in constant time.
+ */
+
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 #include "squeue.h"
 
+/**
+ * Data structure for one entry of the queue.
+ */
 typedef struct ENTRY
 {
   int data;
-  struct ENTRY *next;
-  struct ENTRY *prev;
+  struct ENTRY *next; // pointer to the next entry.
+  struct ENTRY *prev; // pointer to the previous entry.
 } ENTRY;
 
+
+/**
+ * Data structure for the sorted queue.
+ */
 typedef struct _SQUEUE
 {
-  size_t len;
-  ENTRY *head;
-  ENTRY *tail;
+  size_t len; // lenght of the queue
+  ENTRY *head; // pointer to the head of the queue.
+  ENTRY *tail; // pointer to the tail of the queue.
 } _SQUEUE;
 
 
 /**
  * Creates a new sorted queue.
- * @return Handle for the sorted queue
+ *
+ * @return Handle for the created sorted queue.
  */
 SQUEUE squeue_new()
 {
@@ -32,11 +53,12 @@ SQUEUE squeue_new()
   return (SQUEUE)squeue;
 }
 
+
 /**
  * Frees all resources allocated for given queue.
  * The handle is invalid afterwards.
  *
- * @param s Handle of queue to destroy
+ * @param s Handle of queue to destroy.
  */
 void squeue_free(SQUEUE s)
 {
@@ -53,8 +75,12 @@ void squeue_free(SQUEUE s)
 
 /**
  * Insert data at the correct position.
- * @param s Sorted queue
- * @param data To be inserted data
+ * The ordering is numerical. The lowest values are at the beginning of the
+ * queue. Insertion can be done in O(n) where n is the number of elements in
+ * the queue so far.
+ * 
+ * @param s Handle to the sorted queue.
+ * @param data To be inserted data.
  */
 void squeue_insert(SQUEUE s, int data)
 {
@@ -104,9 +130,10 @@ void squeue_insert(SQUEUE s, int data)
 
 
 /**
- * Removes and returns the first value of the queue.
- * @param s Sorted queue
- * @return first value of the given queue
+ * Removes and returns the first value of the queue in constant time.
+ *
+ * @param s Handle to the sorted queue.
+ * @return First value of the given queue.
  */
 int squeue_pop(SQUEUE s)
 {
@@ -130,9 +157,10 @@ int squeue_pop(SQUEUE s)
 
 
 /**
- * Returns (but keeps) the first value of the queue.
- * @param s Sorted queue
- * @return first value of the given queue
+ * Returns (but keeps) the first value of the queue in constant time.
+ *
+ * @param s Handle to the sorted queue.
+ * @return First value of the given queue.
  */
 int squeue_peek(SQUEUE s)
 {
@@ -146,10 +174,12 @@ int squeue_peek(SQUEUE s)
   }
 }
 
+
 /**
- * Returns number of entries in queue.
- * @param s Sorted queue
- * @return number of entries in the given queue
+ * Returns number of entries in queue in constant time.
+ *
+ * @param s Handle to the sorted queue.
+ * @return Number of entries in the given queue.
  */
 int squeue_nitems(SQUEUE s)
 {
@@ -157,6 +187,13 @@ int squeue_nitems(SQUEUE s)
   return squeue->len;
 }
 
+
+/**
+ * Returns (but keeps) the last value of the queue in constant time.
+ *
+ * @param s Handle to the sorted queue.
+ * @return Last element of the sorted queue.
+ */
 int squeue_peek_tail(SQUEUE s)
 {
 	_SQUEUE *squeue = (_SQUEUE *)s;
