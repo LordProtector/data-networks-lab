@@ -105,8 +105,9 @@ void squeue_insert(SQUEUE s, int data)
 
 /**
  * Removes and returns the first value of the queue.
+ * If the queue is empty -1 is returned.
  * @param s Sorted queue
- * @return first value of the given queue
+ * @return first value of the given queue or -1 if it is empty
  */
 int squeue_pop(SQUEUE s)
 {
@@ -131,8 +132,9 @@ int squeue_pop(SQUEUE s)
 
 /**
  * Returns (but keeps) the first value of the queue.
+ * Returns -1 if queue is empty.
  * @param s Sorted queue
- * @return first value of the given queue
+ * @return first value of the given queue or -1 if it is empty
  */
 int squeue_peek(SQUEUE s)
 {

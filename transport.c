@@ -11,7 +11,7 @@
 #include "transport.h"
 #include "bitmap.h"
 #include "buffer.h"
-#include "squeue.h"
+#include "dring.h"
 
 #define SEGMENT_SIZE 1024
 
@@ -28,7 +28,7 @@
 typedef struct
 {
 	BUFFER inBuf;
-	SQUEUE lasts;
+	DRING lasts;
 	size_t recAckOffset; // first byte of first incomplete message
 	VECTOR outSegments;
 	size_t numSentSegments;
@@ -184,22 +184,22 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	if (header.isLast) {
 		size_t endOffset = (header.offset + payloadSize) % MAX_SEGMENT_OFFSET;
-		squeue_insert(con->lasts, endOffset);
+		dring_insert(con->lasts, endOffset);
 	}
 
 	/* check if buffer contains complete messages -> forward to application */
 	size_t bufferStart = con->recAckOffset;
 	con->recAckOffset = buffer_next_invalid(con->inBuf, con->recAckOffset);
-	size_t nextLast = squeue_peek(con->lasts);
+	size_t nextLast = dring_peek(con->lasts);
 
-	while (nextLast <= con->recAckOffset) {
-		squeue_pop(con->lasts);
+	while (nextLast != -1 && nextLast <= con->recAckOffset) {
+		dring_pop(con->lasts);
 		char msg[MAX_MESSAGE_SIZE];
 		size_t msgSize = nextLast - bufferStart;
 		buffer_load(con->inBuf, bufferStart, msg, msgSize);
 		CHECK(CNET_write_application(msg, &msgSize));
 		bufferStart = nextLast + 1;
-		nextLast = squeue_peek(con->lasts);
+		nextLast = dring_peek(con->lasts);
 	}
 
 	/* process acknowledgement */

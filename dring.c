@@ -32,12 +32,33 @@ void dring_insert(DRING d, int data)
 {
 	_DRING *dring = (_DRING *)d;
 
+	assert(data < dring->windowSize*2);
 	int maxFirstRing = squeue_peek_tail(d->a);
 	if(abs(data - maxFirstRing) < dring->windowSize) {
 		squeue_insert(dring->a, data);
 	}
 	else {
 		squeue_insert(dring->b, data);
+	}
+}
+
+/**
+ * Returns (but keeps) the "smallest" value of the double ring.
+ * Returns -1 if double ring is empty.
+ * @param d Double ring
+ * @return "Smallest" value of the given double ring or -1 if it is empty
+ */
+int dring_peek(DRING d)
+{
+	_DRING *dring = (_DRING *)d;
+	
+	if(squeue_nitems(dring->a) == 0) {
+		/* dring empty */
+		assert(squeue_nitems(dring->b) == 0);
+		return -1;
+	}
+	else {
+		return squeue_peek(dring->a);
 	}
 }
 
@@ -67,4 +88,10 @@ int dring_nitems(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
 	return squeue_nitems(dring->a) + squeue_nitems(dring->b);
+}
+
+int main() {
+	DRING d = dring_new(4);
+	dring_insert(d, 8)
+	return 0;
 }
