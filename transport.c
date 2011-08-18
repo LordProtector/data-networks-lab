@@ -27,11 +27,14 @@
 
 typedef struct
 {
+  /* for receiving */
 	BUFFER inBuf;
 	SQUEUE lasts;
 	size_t recAckOffset; // first byte of first incomplete message
-	VECTOR outSegments;
-	size_t numSentSegments;
+	
+	/* for sending */
+	VECTOR outSegments; // sent and queued segments without a received ACK
+	size_t numSentSegments; // which of the outSegments have been send
 	size_t windowSize;
 	size_t nextOffset;
 } CONNECTION;
@@ -192,32 +195,37 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	con->recAckOffset = buffer_next_invalid(con->inBuf, con->recAckOffset);
 	size_t nextLast = squeue_peek(con->lasts);
 
-	while (nextLast <= con->recAckOffset) {
+	while (nextLast < con->recAckOffset) {
 		squeue_pop(con->lasts);
 		char msg[MAX_MESSAGE_SIZE];
 		size_t msgSize = nextLast - bufferStart;
 		buffer_load(con->inBuf, bufferStart, msg, msgSize);
 		CHECK(CNET_write_application(msg, &msgSize));
+		
 		bufferStart = nextLast + 1;
 		nextLast = squeue_peek(con->lasts);
 	}
 
 	/* process acknowledgement */
-	size_t segmentSize;
-	OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
-	SEGMENT *seg = outSeg->seg;
-	size_t endOffset = (seg->header.offset + segmentSize - sizeof(seg->header)) % MAX_SEGMENT_OFFSET;
+	if(vector_nitems(con->outSegments) > 0) {
+		size_t segmentSize;
+		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+		SEGMENT *seg = outSeg->seg;
+		size_t endOffset = (seg->header.offset + segmentSize - sizeof(seg->header)) % MAX_SEGMENT_OFFSET;
 
-	while (compareToAck(endOffset, header.ackOffset, MAX_WINDOW_OFFSET, MAX_SEGMENT_OFFSET)) {
-		outSeg = vector_remove(con->outSegments, 0, NULL);
-		CNET_stop_timer(outSeg->timerId);
-		free(outSeg->seg);
-		free(outSeg);
-		con->numSentSegments--;
+		while (compareToAck(endOffset, header.ackOffset, MAX_WINDOW_OFFSET, MAX_SEGMENT_OFFSET)) {
+			outSeg = vector_remove(con->outSegments, 0, NULL);
+			CNET_stop_timer(outSeg->timerId);
+			free(outSeg->seg);
+			free(outSeg);
+			con->numSentSegments--;
 
-		outSeg = vector_peek(con->outSegments, 0, &segmentSize);
-		seg = outSeg->seg;
-		endOffset = seg->header.offset + segmentSize - sizeof(seg->header) % MAX_SEGMENT_OFFSET;
+			if(vector_nitems(con->outSegments) == 0) break; // no more elements available
+
+			outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+			seg = outSeg->seg;
+			endOffset = seg->header.offset + segmentSize - sizeof(seg->header) % MAX_SEGMENT_OFFSET;
+		}
 	}
 
 	transmit_segments(addr);
