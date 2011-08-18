@@ -112,6 +112,7 @@ void buffer_validate(BUFFER b, size_t pos)
 	size_t byte  = pos / 8;
 	uint8_t mask = 1 << (pos % 8);
 
+  //TODO what about receiving duplicated data
   assert(!(buf->bitmap[byte] & mask)); //do not overwrite valid data
 	buf->bitmap[byte] |= mask;
 }
@@ -211,6 +212,7 @@ bool buffer_check_range(BUFFER b, size_t pos, size_t len)
 
 /**
  * Returns position of invalid unset byte, beginning at pos
+ * Returns "-1" if all bits are set
  *
  * @param b Handle of buffer
  * @param pos Position of first byte to check
@@ -224,10 +226,9 @@ size_t buffer_next_invalid(BUFFER b, size_t pos)
 
 	for (i = pos; i < end; i++) {
 		if (!buffer_check(b, i)) {
-			break;
+		  return i % buf->len;
 		}
 	}
 
-	return i;  //FIXME What to return, if all bits are set?
-	//either -1 or i+1, we should discuss what is better
+	return -1;
 }

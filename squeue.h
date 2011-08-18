@@ -15,4 +15,6 @@ int squeue_pop(SQUEUE s);
 
 int squeue_nitems(SQUEUE s);
 
+int squeue_peek_tail(SQUEUE s);
+
 #endif
