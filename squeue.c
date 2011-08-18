@@ -157,6 +157,17 @@ int squeue_nitems(SQUEUE s)
   return squeue->len;
 }
 
+int squeue_peek_tail(SQUEUE s)
+{
+	_SQUEUE *squeue = (_SQUEUE *)s;
+	if(NULL != squeue->tail) {
+		 ENTRY *entry = squeue->tail;
+		return entry->data;
+	}
+	else
+		return -1;
+}
+
 int main() {
   SQUEUE s = squeue_new();
   squeue_pop(s);
