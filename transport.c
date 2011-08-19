@@ -30,8 +30,8 @@ typedef struct
   /* for receiving */
 	BUFFER inBuf;
 	DRING lasts;
-	size_t recAckOffset; // first byte of first incomplete message
-	
+	size_t bufferStart;  // first byte of first incomplete message
+
 	/* for sending */
 	VECTOR outSegments; // sent and queued segments without a received ACK
 	size_t numSentSegments; // which of the outSegments have been send
@@ -55,8 +55,8 @@ CONNECTION *create_connection(CnetAddr addr)
 	CONNECTION con;
 
 	con.inBuf = buffer_new(TRANSPORT_BUFFER_SIZE);
-	con.lasts = vector_new();
-	con.recAckOffset = 0;
+	con.lasts = dring_new(MAX_WINDOW_SIZE);
+	con.bufferStart = 0;
 	con.outSegments = vector_new();
 	con.numSentSegments = 0;
 	con.windowSize = MAX_WINDOW_SIZE;
@@ -80,7 +80,7 @@ bool compareToAck(size_t offset, size_t ackOffset, size_t range, size_t limit)
 
 size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size_t size)
 {
-	seg->header.offset    = header->offset | header->isLast ? 1 << 15 : 0;
+	seg->header.offset    = header->offset | (header->isLast ? (1 << 15) : 0);
 	seg->header.ackOffset = header->ackOffset;
 
 	memcpy(seg->payload, payload, size);
@@ -90,8 +90,8 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
 
 size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, size_t size)
 {
-	header->isLast    = seg->header.offset & 1 << 15;
-	header->offset    = seg->header.offset ^ header->isLast ? 1 << 15 : 0;
+	header->isLast    = seg->header.offset & (1 << 15);
+	header->offset    = seg->header.offset ^ (header->isLast ? (1 << 15) : 0);
 	header->ackOffset = seg->header.ackOffset;
 
 	size_t payloadSize = size - sizeof(seg->header);
@@ -125,7 +125,7 @@ void transmit_segments(CnetAddr addr)
 	//TODO flow/congestion control
 }
 
-//takes one message, splits it into segments and adds them to outgoing queue and triggers sending of segments 
+//takes one message, splits it into segments and adds them to outgoing queue and triggers sending of segments
 void transport_transmit(CnetAddr addr, char *data, size_t size)
 {
 	char key[5];
@@ -136,17 +136,18 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		con = create_connection(addr);
 	}
 
-	SEGMENT *seg = malloc(sizeof(*seg));
-	segment_header header;
 	size_t remainingBytes = size;
 	size_t processedBytes = 0;
 
 	/* split message into several segments */
 	for (int i = 0; remainingBytes > 0; i++) {
+		SEGMENT *seg = malloc(sizeof(*seg));
+		segment_header header;
+
 		assert(remainingBytes + processedBytes == size);
 		size_t payloadSize = MIN(remainingBytes, SEGMENT_SIZE);
 		header.offset    = con->nextOffset;
-		header.ackOffset = con->recAckOffset;
+		header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 		header.isLast    = remainingBytes == payloadSize;
 
 		size_t segSize = marshal_segment(seg, &header, data + processedBytes, payloadSize);
@@ -191,18 +192,17 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	}
 
 	/* check if buffer contains complete messages -> forward to application */
-	size_t bufferStart = con->recAckOffset;
-	con->recAckOffset = buffer_next_invalid(con->inBuf, con->recAckOffset);
+	size_t ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	size_t nextLast = dring_peek(con->lasts);
 
-	while (nextLast != -1 && nextLast <= con->recAckOffset) {
+	while (nextLast != -1 && nextLast <= ackOffset) {
 		dring_pop(con->lasts);
 		char msg[MAX_MESSAGE_SIZE];
-		size_t msgSize = nextLast - bufferStart;
-		buffer_load(con->inBuf, bufferStart, msg, msgSize);
+		size_t msgSize = nextLast - con->bufferStart;
+		buffer_load(con->inBuf, con->bufferStart, msg, msgSize);
 		CHECK(CNET_write_application(msg, &msgSize));
-		
-		bufferStart = nextLast + 1;
+
+		con->bufferStart = nextLast;
 		nextLast = dring_peek(con->lasts);
 	}
 
