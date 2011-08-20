@@ -55,7 +55,7 @@ CONNECTION *create_connection(CnetAddr addr)
 	CONNECTION con;
 
 	con.inBuf = buffer_new(TRANSPORT_BUFFER_SIZE);
-	con.lasts = dring_new(MAX_WINDOW_SIZE);
+	con.lasts = dring_new(MAX_WINDOW_OFFSET);
 	con.bufferStart = 0;
 	con.outSegments = vector_new();
 	con.numSentSegments = 0;
@@ -72,10 +72,13 @@ CONNECTION *create_connection(CnetAddr addr)
 }
 
 /** Checks whether offset is affected by ackOffset */
-bool compareToAck(size_t offset, size_t ackOffset, size_t range, size_t limit)
+bool acknowledged(size_t offset, size_t ackOffset)
 {
-	return (offset < ackOffset && ackOffset - offset < range) ||
-				 ((limit - offset) + ackOffset < range);
+	offset    %= MAX_SEGMENT_OFFSET;
+	ackOffset %= MAX_SEGMENT_OFFSET;
+
+	return (offset <= ackOffset && ackOffset - offset < MAX_WINDOW_OFFSET) ||
+				 ((MAX_SEGMENT_OFFSET - offset) + ackOffset < MAX_WINDOW_OFFSET);
 }
 
 size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size_t size)
@@ -182,6 +185,12 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	char *payload;
 
 	size_t payloadSize = unmarshal_segment(segment, &header, &payload, size);
+	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart);
+
+	/* ignore duplicated segments */
+	if (acknowledged(header.offset + payloadSize, ackOffset)) {
+		return;
+	}
 
 	/* accumulate segments in buffer */
 	buffer_store(con->inBuf, header.offset, payload, payloadSize);
@@ -192,10 +201,10 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	}
 
 	/* check if buffer contains complete messages -> forward to application */
-	size_t ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
+	ackOffset       = buffer_next_invalid(con->inBuf, con->bufferStart);
 	size_t nextLast = dring_peek(con->lasts);
 
-	while (nextLast != -1 && nextLast <= ackOffset) {
+	while (nextLast != -1 && acknowledged(nextLast, ackOffset)) {
 		dring_pop(con->lasts);
 		char msg[MAX_MESSAGE_SIZE];
 		size_t msgSize = nextLast - con->bufferStart;
@@ -211,9 +220,10 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		size_t segmentSize;
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 		SEGMENT *seg = outSeg->seg;
-		size_t endOffset = (seg->header.offset + segmentSize - sizeof(seg->header)) % MAX_SEGMENT_OFFSET;
+		size_t endOffset = seg->header.offset + segmentSize - sizeof(seg->header);
+		endOffset %= MAX_SEGMENT_OFFSET;
 
-		while (compareToAck(endOffset, header.ackOffset, MAX_WINDOW_OFFSET, MAX_SEGMENT_OFFSET)) {
+		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CNET_stop_timer(outSeg->timerId);
 			free(outSeg->seg);
@@ -224,7 +234,8 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 			outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 			seg = outSeg->seg;
-			endOffset = seg->header.offset + segmentSize - sizeof(seg->header) % MAX_SEGMENT_OFFSET;
+			endOffset  = seg->header.offset + segmentSize - sizeof(seg->header);
+			endOffset %= MAX_SEGMENT_OFFSET;
 		}
 	}
 
