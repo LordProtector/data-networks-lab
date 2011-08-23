@@ -224,10 +224,11 @@ void transmit_frame(int link)
     linkData[link].busy = false;
   }
 
-  // FIXME should be controlled in transport layer
+  #ifdef MILESTONE_2
   if (queue_nitems(linkData[link].queue) <= QUEUE_MIN_MSGS) {
     CNET_enable_application(ALLNODES);
   }
+  #endif
 }
 
 
@@ -264,10 +265,11 @@ void link_transmit(int link, char *data, size_t size)
     queue_add(linkData[link].queue, &frame, frameSize);
   }
 
-  // FIXME should be controlled in transport layer
+  #ifdef MILESTONE_2
   if (queue_nitems(linkData[link].queue) >= QUEUE_MAX_MSGS) {
     CNET_disable_application(ALLNODES);
   }
+  #endif
 
 	/* send frame when timer not running (initial sending) */
   if (!linkData[link].busy) {

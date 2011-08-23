@@ -6,6 +6,8 @@
  * Implementation of milstone 2 of the data networks lab 2011
  */
 
+#define MILESTONE_2
+
 /* include headers */
 #include <stdlib.h>
 #include <string.h>
