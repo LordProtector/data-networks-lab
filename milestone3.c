@@ -17,6 +17,7 @@
 #include "link.c"
 #include "squeue.c"
 #include "buffer.c"
+#include "dring.c"
 
 /**
  * Message of MAX_MESSAGE_SIZE.

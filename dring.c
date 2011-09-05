@@ -1,6 +1,6 @@
 /**
  * dring.c
- *  
+ *
  * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of a double ring.
@@ -35,7 +35,7 @@ typedef struct _DRING
 
 /**
  * Creates a new double ring.
- * 
+ *
  * @param windowSize Size of the window.
  * @return returns the created ring.
  */
@@ -51,7 +51,7 @@ DRING dring_new(int windowSize)
 
 /**
  * Frees all resources allocated for the given double ring.
- * 
+ *
  * @param d Handle of double ring to destroy.
  */
 void dring_free(DRING d)
@@ -76,7 +76,7 @@ void dring_insert(DRING d, int data)
 
 	assert(data < dring->windowSize*2);
 	int maxFirstRing = squeue_peek_tail(dring->a);
-	if(maxFirstRing == -1 && abs(data - maxFirstRing) < dring->windowSize) {
+	if(maxFirstRing == -1 || abs(data - maxFirstRing) < dring->windowSize) {
 		squeue_insert(dring->a, data);
 	}
 	else {
@@ -93,7 +93,7 @@ void dring_insert(DRING d, int data)
 int dring_peek(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
-	
+
 	if(squeue_nitems(dring->a) == 0) {
 		/* dring empty */
 		assert(squeue_nitems(dring->b) == 0);
@@ -113,7 +113,7 @@ int dring_peek(DRING d)
 int dring_pop(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
-	
+
 	if(squeue_nitems(dring->a) == 0) {
 		/* dring empty */
 		assert(squeue_nitems(dring->b) == 0);

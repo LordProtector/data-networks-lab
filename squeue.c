@@ -1,6 +1,6 @@
 /**
  * squeue.c
- *  
+ *
  * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of a sorted queue. It has the ability to add elements to
@@ -78,7 +78,7 @@ void squeue_free(SQUEUE s)
  * The ordering is numerical. The lowest values are at the beginning of the
  * queue. Insertion can be done in O(n) where n is the number of elements in
  * the queue so far.
- * 
+ *
  * @param s Handle to the sorted queue.
  * @param data To be inserted data.
  */
@@ -97,12 +97,12 @@ void squeue_insert(SQUEUE s, int data)
       break;
     }
   }
-  
+
   if (NULL != iter) {
     // iter = first squeue entry with higher data
     entry->next = iter;
     entry->prev = iter->prev;
-    
+
     if(NULL != iter->prev)
       iter->prev->next = entry;
     iter->prev = entry;
@@ -203,38 +203,4 @@ int squeue_peek_tail(SQUEUE s)
 	}
 	else
 		return -1;
-}
-
-int main() {
-  SQUEUE s = squeue_new();
-  squeue_pop(s);
-  squeue_insert(s, 4);
-  squeue_pop(s);
-  squeue_insert(s, 3);
-  squeue_insert(s, 5);
-  squeue_insert(s, -2);
-  squeue_pop(s);
-  squeue_pop(s);
-  squeue_insert(s, 10);
-  squeue_pop(s);
-  squeue_insert(s, 6);
-  squeue_insert(s, 13);
-  squeue_insert(s, 11);
-
-  int j;
-  for(j = 10000000; j>0; j--) {
-    squeue_insert(s, j);
-  }
-  printf("n: %d\n", squeue_nitems(s));
-  squeue_free(s);
-
-  while(1) {}
-
-  printf("peek: %d\n", squeue_peek(s));
-
-  int i;
-  int n = squeue_nitems(s);
-  for(i=0; i<n; i++)
-    printf("%d\n", squeue_pop(s));
-  return 0;
 }
