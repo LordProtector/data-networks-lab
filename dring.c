@@ -75,8 +75,8 @@ void dring_insert(DRING d, int data)
 	_DRING *dring = (_DRING *)d;
 
 	assert(data < dring->windowSize*2);
-	int maxFirstRing = squeue_peek_tail(d->a);
-	if(abs(data - maxFirstRing) < dring->windowSize) {
+	int maxFirstRing = squeue_peek_tail(dring->a);
+	if(maxFirstRing == -1 && abs(data - maxFirstRing) < dring->windowSize) {
 		squeue_insert(dring->a, data);
 	}
 	else {
@@ -148,6 +148,7 @@ int dring_nitems(DRING d)
 
 int main() {
 	DRING d = dring_new(4);
-	dring_insert(d, 8)
+	dring_insert(d, 3);
+	dring_insert(d, 7);
 	return 0;
 }
