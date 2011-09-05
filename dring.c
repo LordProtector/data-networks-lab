@@ -145,10 +145,3 @@ int dring_nitems(DRING d)
 	_DRING *dring = (_DRING *)d;
 	return squeue_nitems(dring->a) + squeue_nitems(dring->b);
 }
-
-int main() {
-	DRING d = dring_new(4);
-	dring_insert(d, 3);
-	dring_insert(d, 7);
-	return 0;
-}
