@@ -20,16 +20,34 @@
 #include "buffer.h"
 #include "dring.h"
 
+/**
+ * Size of a segment in byte.
+ */
 #define SEGMENT_SIZE 1024
 
+/**
+ * Maximal number of segments in storage and under transmission.
+ */
 #define MAX_WINDOW_SIZE 30
 
+/**
+ * Maximal offset of the window in byte.
+ */
 #define MAX_WINDOW_OFFSET (MAX_WINDOW_SIZE * SEGMENT_SIZE)
 
+/**
+ * Timeout in usec when a segment needs to be resend.
+ */
 #define TRANSPORT_TIMEOUT 1000000
 
+/**
+ * Maximal offset of the segment in byte (UINT15).
+ */
 #define MAX_SEGMENT_OFFSET (UINT16_MAX >> 1)
 
+/**
+ * Maximal offset of the segment in byte (UINT15).
+ */
 #define TRANSPORT_BUFFER_SIZE MAX_SEGMENT_OFFSET
 
 
@@ -45,9 +63,9 @@ typedef struct
 
 	/* for sending */
 	VECTOR outSegments;     // Sent and queued segments without a received ACK.
-	size_t numSentSegments; // Which of the outSegments have been send.
+	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
-	size_t nextOffset;      // ???
+	size_t nextOffset;      // The next offset the connection is waiting for. Initially it is 0.
 } CONNECTION;
 
 /**
@@ -57,13 +75,14 @@ typedef struct
  */
 typedef struct
 {
-	CnetTimerID timerId; // The ID of the timer.
-	CnetAddr addr;       // The address.
+	CnetTimerID timerId; // The ID of the timer to count the timeout.
+	CnetAddr addr;       // The destination address of the segment.
 	size_t size;         // Size of the out segment
 	SEGMENT *seg;        // Pointer to the data stored in the segment.
 } OUT_SEGMENT;
 
 
+CONNECTION* transport_connection_lookup(CnetAddr addr);
 
 /**
  * Stores the connections a host holds.
@@ -109,7 +128,14 @@ CONNECTION *create_connection(CnetAddr addr)
 	return ret;
 }
 
-/** Checks whether offset is affected by ackOffset */
+/**
+ * Checks whether offset is affected by ackOffset.
+ * Returns true if offset has already been acknowledged.
+ * 
+ * @param offset Offset to test for.
+ * @param ackOffset First invalid offset.
+ * @return Returns true if offset has already been acknowledged.
+ */
 bool acknowledged(size_t offset, size_t ackOffset)
 {
 	offset    %= MAX_SEGMENT_OFFSET;
@@ -119,6 +145,15 @@ bool acknowledged(size_t offset, size_t ackOffset)
 				 ((MAX_SEGMENT_OFFSET - offset) + ackOffset < MAX_WINDOW_OFFSET);
 }
 
+/**
+ * 
+ * Calculates the distance between startOffset and endOffset. This corresponds
+ * to the length of the message.
+ * 
+ * @param startOffset End offset for the calculation.
+ * @param endOffset End offset of the calculation.
+ * @return Distance between start and end offset.
+ */
 size_t distance(size_t startOffset, size_t endOffset)
 {
 	if (endOffset > startOffset) {
@@ -128,8 +163,19 @@ size_t distance(size_t startOffset, size_t endOffset)
 	}
 }
 
+/**
+ * Marshals segment for efficient transmission. Segment needs to be unmarshaled
+ * before usage.
+ * 
+ * @param seg Marshaled segment.
+ * @param header Header of the segment.
+ * @param payload Payload of the segment.
+ * @param size Size of the payload.
+ * @return Size of the marshaled segment.
+ */
 size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size_t size)
 {
+	//encode isLast in offset
 	seg->header.offset    = header->offset | (header->isLast ? (1 << 15) : 0);
 	seg->header.ackOffset = header->ackOffset;
 
@@ -138,8 +184,17 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
 	return size + sizeof(seg->header);
 }
 
+/**
+ * Unmarshals segment.
+ * 
+ * @param seg Segment to unmarshal.
+ * @param header Unmarshaled header.
+ * @param payload Unmarshald payload.
+ * @param size Size of the unmarshaled payload.
+ */
 size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, size_t size)
 {
+	//decode isLast from offset
 	header->isLast    = seg->header.offset & (1 << 15);
 	header->offset    = seg->header.offset ^ (header->isLast ? (1 << 15) : 0);
 	header->ackOffset = seg->header.ackOffset;
@@ -150,23 +205,30 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 	return payloadSize;
 }
 
-/** Hands segment to network layer and starts timer */
+/**
+ * Hands segment to network layer and starts timer.
+ * 
+ * @param outSeg Segment to hand over to network layer.
+ */
 void transmit_segment(OUT_SEGMENT *outSeg)
 {
-	char key[5];
-	int2string(key, outSeg->addr);
-	CONNECTION *con = hashtable_find(connections, key, NULL);
+	CONNECTION *con = transport_connection_lookup(outSeg->addr);
 
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, TRANSPORT_TIMEOUT, (CnetData) outSeg);
 }
 
+/**
+ * Transmits segments to address 'addr' if window is not saturated and segments
+ * are available.
+ * 
+ * @param addr Address to transmit segments to.
+ */
 void transmit_segments(CnetAddr addr)
 {
-	char key[5];
-	int2string(key, addr);
-	CONNECTION *con = hashtable_find(connections, key, NULL);
+	//load connection
+	CONNECTION *con = transport_connection_lookup(addr);
 	assert(con != NULL);
 
   //window not saturated and segments available
@@ -183,12 +245,22 @@ void transmit_segments(CnetAddr addr)
 	}
 }
 
-//takes one message, splits it into segments and adds them to outgoing queue and triggers sending of segments
+/**
+ * Transmits a message.
+ * 
+ * A new connection is created if it is the first to send to or receive from
+ * 'addr'. If necessary the message is split into several parts (size is given
+ * by SEGMENT_SIZE) which are added to the outgoing queue.
+ * Finally it triggers the sending of segments. 
+ * 
+ * @param addr Address to send the message to.
+ * @param data Data to send to address 'addr'
+ * @param size Size of the message.
+ */
 void transport_transmit(CnetAddr addr, char *data, size_t size)
 {
-	char key[5];
-	int2string(key, addr);
-	CONNECTION *con = hashtable_find(connections, key, NULL);
+	//load connection
+	CONNECTION *con = transport_connection_lookup(addr);
 
 	if (con == NULL) {
 		con = create_connection(addr);
@@ -219,9 +291,11 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		outSeg.seg = seg;
 		outSeg.size = segSize;
 
+		//add created segment to vector of sendable segments
 		vector_append(con->outSegments, &outSeg, sizeof(outSeg));
 	}
 
+	//stop the application if list of outsegments exceeds threshold
 	if (vector_nitems(con->outSegments) > 20) {
 		CNET_disable_application(addr);
 	}
@@ -229,11 +303,23 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 	transmit_segments(addr);
 }
 
+/**
+ * Receive a message.
+ * 
+ * A new connection is created if it is the first to send to or receive from
+ * 'addr'. Received data are stored in a buffer if they are not already acknowledged. If the buffer contains complete messages, they are forwarded to the application and deleted from the buffer.
+ * 
+ * 
+ * Finally it triggers the sending of segments. 
+ * 
+ * @param addr Source address.
+ * @param data Data to receive.
+ * @param size Size of the data to receive.
+ */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
-	char key[5];
-	int2string(key, addr);
-	CONNECTION *con = hashtable_find(connections, key, NULL);
+	//load connection
+	CONNECTION *con = transport_connection_lookup(addr);
 
 	if (con == NULL) {
 		con = create_connection(addr);
@@ -251,7 +337,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		/* accumulate segments in buffer */
 		buffer_store(con->inBuf, header.offset, payload, payloadSize);
 
-		if (header.isLast) {
+		if (header.isLast) { //store endOffset if segment is the last one
 			size_t endOffset = (header.offset + payloadSize) % MAX_SEGMENT_OFFSET;
 			dring_insert(con->lasts, endOffset);
 		}
@@ -272,7 +358,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		}
 	}
 
-	/* process acknowledgement */
+	/* process acknowledgment */
 	if(vector_nitems(con->outSegments) > 0) {
 		size_t segmentSize;
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
@@ -297,6 +383,20 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	}
 
 	transmit_segments(addr);
+}
+
+/**
+ * Lookup address in connections table and return the corresponding CONNECTION.
+ * 
+ * @param addr The address to look up.
+ * @return The corresponding CONNECTION from the connection table.
+ */
+CONNECTION* transport_connection_lookup(CnetAddr addr)
+{
+	char key[5];
+	int2string(key, addr);
+	CONNECTION *con = hashtable_find(connections, key, NULL);
+	return con;
 }
 
 

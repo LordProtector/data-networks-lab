@@ -140,7 +140,7 @@ void network_init()
 }
 
 /**
- * Lookup link in forwarding_table and returns the coresponding link.
+ * Lookup link in forwarding_table and returns the corresponding link.
  * 
  * @param addr The address to look up.
  * @return The link to send the data over.
