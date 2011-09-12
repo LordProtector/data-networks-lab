@@ -1,3 +1,10 @@
+/**
+ * link.h
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Header file for link layer implementation.
+ */
 #ifndef LINK_H_
 #define LINK_H_
 

@@ -1,5 +1,14 @@
 #!/bin/bash
 
+#
+# analyze.sz
+#
+# @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+#
+# Short script to start cnet with a topology file and an execution period.
+# Additionally it creates statistics for message, latency and throughput.
+#
+
 rm *.o
 mkdir tmp
 

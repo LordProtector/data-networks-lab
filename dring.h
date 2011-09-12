@@ -1,18 +1,26 @@
-	#ifndef DRING_H_
-	#define DRING_H_
+/**
+ * dring.h
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Header file for a double ring.
+ */
 
-	typedef void * DRING;
+#ifndef DRING_H_
+#define DRING_H_
 
-	DRING dring_new(int windowSize);
+typedef void * DRING;
 
-	void dring_free(DRING d);
+DRING dring_new(int windowSize);
 
-	void dring_insert(DRING d, int data);
+void dring_free(DRING d);
 
-	int dring_peek(DRING d);
+void dring_insert(DRING d, int data);
 
-	int dring_pop(DRING d);
+int dring_peek(DRING d);
 
-	int dring_nitems(DRING d);
+int dring_pop(DRING d);
+
+int dring_nitems(DRING d);
 
 #endif

@@ -22,9 +22,9 @@
  */
 typedef struct ENTRY
 {
-  int data;
-  struct ENTRY *next; // pointer to the next entry.
-  struct ENTRY *prev; // pointer to the previous entry.
+  int data;           // Data of the entry. It is used for sorting.
+  struct ENTRY *next; // Pointer to the next entry.
+  struct ENTRY *prev; // Pointer to the previous entry.
 } ENTRY;
 
 
@@ -33,9 +33,9 @@ typedef struct ENTRY
  */
 typedef struct _SQUEUE
 {
-  size_t len; // lenght of the queue
-  ENTRY *head; // pointer to the head of the queue.
-  ENTRY *tail; // pointer to the tail of the queue.
+  size_t len;  // Length of the queue.
+  ENTRY *head; // Pointer to the head of the queue.
+  ENTRY *tail; // Pointer to the tail of the queue.
 } _SQUEUE;
 
 
@@ -92,6 +92,7 @@ void squeue_insert(SQUEUE s, int data)
   entry->prev = NULL;
 
   ENTRY* iter;
+  //find position for insertion
   for(iter = squeue->head; NULL != iter; iter = iter->next) {
     if(iter->data > entry->data) {
       break;
@@ -130,19 +131,22 @@ void squeue_insert(SQUEUE s, int data)
 
 
 /**
- * Removes and returns the first value of the queue in constant time.
+ * Removes and returns the first value of the queue in constant time and -1
+ * if the queue is empty.
  *
  * @param s Handle to the sorted queue.
- * @return First value of the given queue.
+ * @return First value of the given queue or -1 if the queue is empty.
  */
 int squeue_pop(SQUEUE s)
 {
   _SQUEUE *squeue = (_SQUEUE *)s;
   ENTRY *entry = squeue->head;
-  if (NULL != entry) {
+  if (NULL != entry) { //are there elements in the queue?
     squeue->head = entry->next;
+    //update pointers
     if(NULL != squeue->head)
       squeue->head->prev = NULL;
+    //is the queue empty after removing one element?
     if(squeue->tail == entry)
       squeue->tail = NULL;
     int ret = entry->data;
@@ -150,17 +154,18 @@ int squeue_pop(SQUEUE s)
     squeue->len--;
     return ret;
   }
-  else {
+  else { //there are no elements to return
     return -1;
   }
 }
 
 
 /**
- * Returns (but keeps) the first value of the queue in constant time.
+ * Returns (but keeps) the first value of the queue in constant time and -1
+ * if the queue is empty.
  *
  * @param s Handle to the sorted queue.
- * @return First value of the given queue.
+ * @return First value of the given queue or -1 if the queue is empty.
  */
 int squeue_peek(SQUEUE s)
 {
@@ -189,18 +194,20 @@ int squeue_nitems(SQUEUE s)
 
 
 /**
- * Returns (but keeps) the last value of the queue in constant time.
+ * Returns (but keeps) the last value of the queue in constant time or -1
+ * if the queue is empty.
  *
  * @param s Handle to the sorted queue.
- * @return Last element of the sorted queue.
+ * @return Last element of the sorted queue or -1 if the queue is empty.
  */
 int squeue_peek_tail(SQUEUE s)
 {
-	_SQUEUE *squeue = (_SQUEUE *)s;
-	if(NULL != squeue->tail) {
-		 ENTRY *entry = squeue->tail;
-		return entry->data;
-	}
-	else
-		return -1;
+  _SQUEUE *squeue = (_SQUEUE *)s;
+  if(NULL != squeue->tail) {
+    ENTRY *entry = squeue->tail;
+    return entry->data;
+  }
+  else {
+    return -1;
+  }
 }

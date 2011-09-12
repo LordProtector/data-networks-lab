@@ -1,4 +1,23 @@
-/** Link layer */
+/**
+ * link.c
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Implementation of the link layer.
+ * 
+ * A link must be initialized before usage by calling link_init().
+ * 
+ * The link layer has the possibility to send data over a desired link.Thereby
+ * it splits data into several frames if neccessary.
+ * 
+ * The link layer uses a queue to buffer frames to reduces the amount of time
+ * being idle between the transmission of two frames.
+ * 
+ * If a frame is reveived fully without errors it is handed over to the upper
+ * layer. Corrupted frames are droped.
+ * 
+ * //TODO Error corection could be implemented here. 
+ */
 
 /* include headers */
 #include <stdlib.h>
@@ -39,17 +58,17 @@
 #define QUEUE_MIN_MSGS (QUEUE_MAX_MSGS / 2)
 
 /**
- * Used for setting and querying isLast flag of a frame
+ * Used for setting and querying isLast flag of a frame.
  */
 #define IS_LAST (1 << 7)
 
 /**
- * Size of an input buffer
+ * Size of an input buffer.
  */
 #define BUFFER_SIZE MAX_DATAGRAM_SIZE
 
 /**
- * The largest allowed id for frames
+ * The largest allowed id for frames.
  */
 #define FRAME_ID_LIMIT (UINT8_MAX >> 1)
 
@@ -57,7 +76,7 @@
 /* Structs */
 
 /**
- * Represents a link
+ * Represents a link.
  */
 typedef struct link_t
 {
@@ -78,7 +97,7 @@ typedef unsigned char * buf_t;
 /* Variables */
 
 /**
- * Status and data of links of this host
+ * Status and data of links of this host.
  */
 link_t *linkData;
 
@@ -89,10 +108,10 @@ link_t *linkData;
  * Encodes payload, such that some error correction is possible.
  * Returns size of encoded payload.
  *
- * @param frame Frame where the encoded payload shall be placed
- * @param payload The payload to encode
- * @param size Size of the payload
- * @return Size of encoded payload
+ * @param frame Frame where the encoded payload shall be placed.
+ * @param payload The payload to encode.
+ * @param size Size of the payload.
+ * @return Size of encoded payload.
  */
 size_t encode_payload(FRAME *frame, char *payload, size_t size)
 {
@@ -106,10 +125,10 @@ size_t encode_payload(FRAME *frame, char *payload, size_t size)
  * Decodes payload from frame.
  * Returns size of encoded payload or 0 if correction fails.
  *
- * @param frame The frame from which the payload is to be decoded
- * @param payload Position where the decoded payload is to be stored
- * @param size Size of the decoded payload
- * @return Size of decoded payload or 0 if decoding fails
+ * @param frame The frame from which the payload is to be decoded.
+ * @param payload Position where the decoded payload is to be stored.
+ * @param size Size of the decoded payload.
+ * @return Size of decoded payload or 0 if decoding fails.
  */
 size_t decode_payload(FRAME *frame, char *payload, size_t size)
 {
@@ -120,14 +139,15 @@ size_t decode_payload(FRAME *frame, char *payload, size_t size)
 }
 
 /**
- * Marshals frame for efficient transmission.
+ * Marshals frame for efficient transmission and encodes the payload for
+ * error correction.
  * Adds computed checksum.
  *
- * @param header The header to encode
- * @param frame The marshaled frame
- * @param payload Payload for the frame
- * @param size Size of payload
- * @return Size of the frame
+ * @param header The header to encode.
+ * @param frame The marshaled frame.
+ * @param payload Payload for the frame.
+ * @param size Size of payload.
+ * @return Size of the frame.
  */
 size_t marshal_frame(FRAME *frame, frame_header *header, char* payload, size_t size)
 {
@@ -149,11 +169,11 @@ size_t marshal_frame(FRAME *frame, frame_header *header, char* payload, size_t s
  * Unmarshals frame.
  * Checks checksum.
  *
- * @param header The unmarshaled header
- * @param frame The frame from which the header is to be unmarshaled
- * @param payload Where to store the frames decoded payload
- * @param size Size of frame
- * @return Size of payload or 0 in case of uncorrectable error
+ * @param header The unmarshaled header.
+ * @param frame The frame from which the header is to be unmarshaled.
+ * @param payload Where to store the frames decoded payload.
+ * @param size Size of frame.
+ * @return Size of payload or 0 in case of uncorrectable error.
  */
 size_t unmarshal_frame(FRAME *frame, frame_header *header, char *payload, size_t size)
 {
@@ -205,6 +225,7 @@ void transmit_frame(int link)
   size_t length;
   double timeout;
 
+  //are there data to send for the link?
   if (queue_nitems(linkData[link].queue)) {
     msg = queue_peek(linkData[link].queue, &length);
     int ph_status = CNET_write_physical(link, msg, &length);
@@ -279,6 +300,8 @@ void link_transmit(int link, char *data, size_t size)
 
 /**
  * Takes a received frame and prepares a datagram for upper layer from it.
+ * Only valide data are transmitted to upper layer. Thus, corruption becomes
+ * frame loss.
  *
  * @param data The received data.
  * @param size The size of the data.
@@ -291,12 +314,14 @@ void link_receive(int link, char *data, size_t size)
   char payload[size];
   size_t payloadSize = unmarshal_frame(frame, &header, payload, size);
 
+  //messages with zero length are corrupt
   if (!payloadSize) {
     linkData[link].corrupt = true;
     return;
   }
 
   if (header.id == linkData[link].recId) {
+    //is the ordering the one I expect?
     if (linkData[link].corrupt || header.ordering != linkData[link].ordering) {
       linkData[link].corrupt = true;
       return;
@@ -304,7 +329,7 @@ void link_receive(int link, char *data, size_t size)
   } else { //new datagram
     linkData[link].recId = header.id;
 
-		/* first frame has ordering = 0 */
+    /* first frame has ordering = 0 */
     if (header.ordering == 0) {
       linkData[link].corrupt = false;
       linkData[link].size = 0;
@@ -314,18 +339,22 @@ void link_receive(int link, char *data, size_t size)
     }
   }
 
-	assert(linkData[link].size + payloadSize <= BUFFER_SIZE);
+  assert(linkData[link].size + payloadSize <= BUFFER_SIZE);
+  //store data in buffer for later usage
   memcpy(linkData[link].buffer + linkData[link].size, payload, payloadSize);
+  //for the next frame we expecte an incremented ordering number
   linkData[link].ordering = header.ordering + 1;
   linkData[link].size += payloadSize;
 
+  //is the frame received fully without errors?
   if (header.isLast && !linkData[link].corrupt) {
+    //send data to upper layer
     network_receive(link, linkData[link].buffer, linkData[link].size);
   }
 }
 
 /**
- * Initializes the link layer
+ * Initializes the link layer.
  *
  * Must be called before the link layer can be used after reboot.
  */

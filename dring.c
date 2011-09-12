@@ -27,14 +27,14 @@
  */
 typedef struct _DRING
 {
-	SQUEUE a; // queue with the "smaller" elements
-	SQUEUE b; // queue with the "larger" elements
+	SQUEUE s; // queue with the "smaller" elements
+	SQUEUE l; // queue with the "larger" elements
 	int windowSize; // size of the window
 } _DRING;
 
 
 /**
- * Creates a new double ring.
+ * Creates a new double ring of size <code>windowSize</code>.
  *
  * @param windowSize Size of the window.
  * @return returns the created ring.
@@ -42,8 +42,8 @@ typedef struct _DRING
 DRING dring_new(int windowSize)
 {
 	_DRING *dring = malloc(sizeof(*dring));
-	dring->a = squeue_new();
-	dring->b = squeue_new();
+	dring->s = squeue_new();
+	dring->l = squeue_new();
 	dring->windowSize = windowSize;
 	return (DRING)dring;
 }
@@ -57,8 +57,8 @@ DRING dring_new(int windowSize)
 void dring_free(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
-	squeue_free(dring->a);
-	squeue_free(dring->b);
+	squeue_free(dring->s);
+	squeue_free(dring->l);
 	free(dring);
 }
 
@@ -75,32 +75,32 @@ void dring_insert(DRING d, int data)
 	_DRING *dring = (_DRING *)d;
 
 	assert(data < dring->windowSize*2);
-	int maxFirstRing = squeue_peek_tail(dring->a);
+	int maxFirstRing = squeue_peek_tail(dring->s);
 	if(maxFirstRing == -1 || abs(data - maxFirstRing) < dring->windowSize) {
-		squeue_insert(dring->a, data);
+		squeue_insert(dring->s, data);
 	}
 	else {
-		squeue_insert(dring->b, data);
+		squeue_insert(dring->l, data);
 	}
 }
 
 /**
  * Returns (but keeps) the "smallest" value of the double ring.
  * Returns -1 if double ring is empty.
- * @param d Double ring
- * @return "Smallest" value of the given double ring or -1 if it is empty
+ * @param d Double ring.
+ * @return "Smallest" value of the given double ring or -1 if it is empty.
  */
 int dring_peek(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
 
-	if(squeue_nitems(dring->a) == 0) {
-		/* dring empty */
-		assert(squeue_nitems(dring->b) == 0);
-		return -1;
+	if(squeue_nitems(dring->s) > 0) {
+		return squeue_peek(dring->s);
 	}
 	else {
-		return squeue_peek(dring->a);
+		/* dring empty */
+		assert(squeue_nitems(dring->l) == 0);
+		return -1;
 	}
 }
 
@@ -114,21 +114,21 @@ int dring_pop(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
 
-	if(squeue_nitems(dring->a) == 0) {
-		/* dring empty */
-		assert(squeue_nitems(dring->b) == 0);
-		return -1;
-	}
-	else {
-		int ret = squeue_pop(dring->a);
-
-		if(squeue_nitems(dring->a) == 0) {
+	if(squeue_nitems(dring->s) > 0) {
+		int ret = squeue_pop(dring->s);
+		
+		if(squeue_nitems(dring->s) == 0) {
 			/* dring has become empty -> switch rings */
-			SQUEUE *tmp = dring->b;
-			dring->b = dring->a;
-			dring->a = tmp;
+			SQUEUE *tmp = dring->l;
+			dring->l = dring->s;
+			dring->s = tmp;
 		}
 		return ret;
+	}
+	else {
+		/* dring empty */
+		assert(squeue_nitems(dring->l) == 0);
+		return -1;
 	}
 }
 
@@ -143,5 +143,5 @@ int dring_pop(DRING d)
 int dring_nitems(DRING d)
 {
 	_DRING *dring = (_DRING *)d;
-	return squeue_nitems(dring->a) + squeue_nitems(dring->b);
+	return squeue_nitems(dring->s) + squeue_nitems(dring->l);
 }

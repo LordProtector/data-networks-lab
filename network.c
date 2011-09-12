@@ -1,4 +1,22 @@
-/** Network layer */
+/**
+ * network.c
+ *
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Implementation of the network layer.
+ *
+ * The network layer takes a segment, packs it into a datagram and passes it to
+ * the link layer. It calculates the outgoing link by its forwarding table.
+ * 
+ * When receiving a datagram it either forwards it to the next hop (using the
+ * forwarding table) or hands it to the upper layer if the host is the
+ * destination host.
+ * 
+ * The second task is to build the forwarding table.
+ * TODO using which algorithm?????
+ * 
+ * For each datagram it is checked if it is "normal" data or a routing packet.
+ */
 
 /* include headers */
 #include <stdlib.h>
@@ -11,10 +29,17 @@
 #include "network.h"
 #include "transport.h"
 
+
+/**
+ * Max number of hops a datagram is allowed to travel before it gets dropped.
+ */
 #define HOP_LIMIT 8
 
 void int2string(char* s, int i);
 
+/**
+ * Stores which route a packet should travel for a given destination.
+ */
 HASHTABLE forwarding_table;
 
 /**
@@ -26,10 +51,8 @@ HASHTABLE forwarding_table;
  */
 void network_transmit(CnetAddr addr, char *data, size_t size)
 {
-	/* lookup link in forwarding_table */
-	char key[5];
-	int2string(key, addr);
-	int link = *((int*) hashtable_find(forwarding_table, key, NULL));
+
+	int link =  network_lookup(addr);
 
 	/* datagram header */
 	datagram_header header;
@@ -40,11 +63,11 @@ void network_transmit(CnetAddr addr, char *data, size_t size)
 
 	/* assemble datagram */
 	DATAGRAM datagram;
-  datagram.header = header;
+	datagram.header = header;
 	memcpy(&datagram.payload, data, size);
 	size_t datagramSize = size + sizeof(datagram_header);
 
-  /* send datagram */
+	/* send datagram */
 	link_transmit(link, (char*) &datagram, datagramSize);
 }
 
@@ -63,7 +86,7 @@ void network_receive(int link, char *data, size_t size)
 	CnetAddr destaddr = datagram->header.destaddr;
 
 	if(0 >= datagram->header.hoplimit)
-		return; //hoplimit exceeded
+		return; //hoplimit exceeded -> drop data
 
 	if(nodeinfo.address == destaddr) {
 		/* datagram destination = this node -> hand to upper layer */
@@ -75,15 +98,18 @@ void network_receive(int link, char *data, size_t size)
 	}
 	else {
 		/* datagram destination = foreign node -> forward */
-		char key[5];
-		int2string(key, destaddr);
-		int link = *((int*) hashtable_find(forwarding_table, key, NULL));
+		int link =network_lookup(destaddr);
 
 		datagram->header.hoplimit--;
 		link_transmit(link, (char*) datagram, size);
 	}
 }
 
+/**
+ * Initializes the network layer.
+ * 
+ * Must be called before the network layer can be used after reboot.
+ */
 void network_init()
 {
 	forwarding_table = hashtable_new(0);
@@ -92,7 +118,7 @@ void network_init()
 	#define HOM 96
 	#define SLS 182
 
-	/* static forwarding_table creation */
+	/* static forwarding_table creation for saarnet_3 */
 	char key[5];
 	int* one = malloc(sizeof(one)); *one = 1;
 	int* two = malloc(sizeof(two)); *two = 2;
@@ -111,4 +137,17 @@ void network_init()
     int2string(key, HOM);	hashtable_add(forwarding_table, key, one, sizeof(int));
 		break;
 	}
+}
+
+/**
+ * Lookup link in forwarding_table and returns the coresponding link.
+ * 
+ * @param addr The address to look up.
+ * @return The link to send the data over.
+ */
+int network_lookup(CnetAddr addr)
+{
+	char key[5];
+	int2string(key, addr);
+	return *((int*) hashtable_find(forwarding_table, key, NULL));
 }

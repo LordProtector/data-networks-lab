@@ -1,3 +1,19 @@
+/**
+ * bitmap.c
+ *
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Implementation of a bitmap.
+ *
+ * The bitmap is a memory block of a specific length which stores data in a
+ * cyclic way. Each position of the bitmap can either be zero or one. On
+ * initialization all values are zero. Each position can efficiently be set
+ * to zero, one, or can be flipped. Also ranges can be set, unset, or flipped.
+ * Additionally, the position of the next unset bit can be found or a range
+ * can be checked to be set on.
+ * 
+ */
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -8,15 +24,15 @@
  */
 typedef struct _BITMAP
 {
-  size_t  len;
-  uint8_t *map;
+  size_t  len;  // Length of the bitmap.
+  uint8_t *map; // Data of the bitmap.
 } _BITMAP;
 
 /**
  * Creates a new circular bitmap of length 'len' and returns a handle to it.
  *
- * @param len The length of the bitmap to create
- * @return Handle for created bitmap
+ * @param len The length of the bitmap to create.
+ * @return Handle for created bitmap.
  */
 BITMAP bitmap_new(size_t len)
 {
@@ -31,7 +47,7 @@ BITMAP bitmap_new(size_t len)
  * Frees all resources allocated for given bitmap.
  * The handle is invalid afterwards.
  *
- * @param b Handle of bitmap to destroy
+ * @param b Handle of bitmap to destroy.
  */
 void bitmap_free(BITMAP b)
 {
@@ -44,8 +60,8 @@ void bitmap_free(BITMAP b)
 /**
  * Sets bit at position 'pos' of bitmap 'b'.
  *
- * @param b Handle of bitmap
- * @param pos Position of bit to set
+ * @param b Handle of bitmap.
+ * @param pos Position of bit to set.
  */
 void bitmap_set(BITMAP b, size_t pos)
 {
@@ -61,9 +77,9 @@ void bitmap_set(BITMAP b, size_t pos)
 /**
  * Sets 'len' bits from position 'pos' of bitmap 'b' on.
  *
- * @param b Handle of bitmap
- * @param pos Position of first bit to set
- * @param len Number of bits to set
+ * @param b Handle of bitmap.
+ * @param pos Position of first bit to set.
+ * @param len Number of bits to set.
  */
 void bitmap_set_range(BITMAP b, size_t pos, size_t len)
 {
@@ -78,8 +94,8 @@ void bitmap_set_range(BITMAP b, size_t pos, size_t len)
 /**
  * Clears bit at position 'pos' of bitmap 'b'.
  *
- * @param b Handle of bitmap
- * @param pos Position of bit to clear
+ * @param b Handle of bitmap.
+ * @param pos Position of bit to clear.
  */
 void bitmap_clear(BITMAP b, size_t pos)
 {
@@ -97,9 +113,9 @@ void bitmap_clear(BITMAP b, size_t pos)
 /**
  * Clears 'len' bits from position 'pos' of bitmap 'b' on.
  *
- * @param b Handle of bitmap
- * @param pos Position of first bit to clear
- * @param len Number of bits to clear
+ * @param b Handle of bitmap.
+ * @param pos Position of first bit to clear.
+ * @param len Number of bits to clear.
  */
 void bitmap_clear_range(BITMAP b, size_t pos, size_t len)
 {
@@ -114,8 +130,8 @@ void bitmap_clear_range(BITMAP b, size_t pos, size_t len)
 /**
  * Flips bit at position 'pos' of bitmap 'b'.
  *
- * @param b Handle of bitmap
- * @param pos Position of bit to flip
+ * @param b Handle of bitmap.
+ * @param pos Position of bit to flip.
  */
 void bitmap_flip(BITMAP b, size_t pos)
 {
@@ -131,9 +147,9 @@ void bitmap_flip(BITMAP b, size_t pos)
 /**
  * Flips 'len' bits from position 'pos' of bitmap 'b' on.
  *
- * @param b Handle of bitmap
- * @param pos Position of first bit to flip
- * @param len Number of bits to flip
+ * @param b Handle of bitmap.
+ * @param pos Position of first bit to flip.
+ * @param len Number of bits to flip.
  */
 void bitmap_flip_range(BITMAP b, size_t pos, size_t len)
 {
@@ -148,9 +164,9 @@ void bitmap_flip_range(BITMAP b, size_t pos, size_t len)
 /**
  * Checks whether bit at position 'pos' of bitmap 'b' is set.
  *
- * @param b Handle of bitmap
- * @param pos Position of bit to return
- * @return Whether the requested bit is set
+ * @param b Handle of bitmap.
+ * @param pos Position of bit to return.
+ * @return Whether the requested bit is set.
  */
 bool bitmap_check(BITMAP b, size_t pos)
 {
@@ -166,10 +182,10 @@ bool bitmap_check(BITMAP b, size_t pos)
 /**
  * Checks whether 'len' continuous bits from position 'pos' on are set.
  *
- * @param b Handle of bitmap
- * @param pos Position of first bit to check
- * @param len Number of bits to check
- * @return Whether bits are set
+ * @param b Handle of bitmap.
+ * @param pos Position of first bit to check.
+ * @param len Number of bits to check.
+ * @return Whether bits are set.
  */
 bool bitmap_check_range(BITMAP b, size_t pos, size_t len)
 {
@@ -188,10 +204,10 @@ bool bitmap_check_range(BITMAP b, size_t pos, size_t len)
 /**
  * Returns position of first unset bit, beginning at pos
  *
- * @param b Handle of bitmap
- * @param pos Position of first bit to check
- * @param len Number of bits to check
- * @return position of first unset bit, beginning at pos
+ * @param b Handle of bitmap.
+ * @param pos Position of first bit to check.
+ * @param len Number of bits to check.
+ * @return Position of first unset bit, beginning at pos.
  */
 size_t bitmap_next_unset(BITMAP b, size_t pos)
 {

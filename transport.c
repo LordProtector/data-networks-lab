@@ -1,4 +1,11 @@
-/** Transport layer */
+/**
+ * transport.c
+ *
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Implementation of the transport layer.
+ *
+ */
 
 /* include headers */
 #include <stdlib.h>
@@ -25,31 +32,61 @@
 
 #define TRANSPORT_BUFFER_SIZE MAX_SEGMENT_OFFSET
 
+
+/**
+ * Data structure for one connection.
+ */
 typedef struct
 {
   /* for receiving */
-	BUFFER inBuf;
-	DRING lasts;
-	size_t bufferStart;  // first byte of first incomplete message
+	BUFFER inBuf;           // Buffer for incoming data.
+	DRING lasts;            // Stores the cyclic sequence numbers which are received.
+	size_t bufferStart;     // First byte of first incomplete message.
 
 	/* for sending */
-	VECTOR outSegments; // sent and queued segments without a received ACK
-	size_t numSentSegments; // which of the outSegments have been send
-	size_t windowSize;
-	size_t nextOffset;
+	VECTOR outSegments;     // Sent and queued segments without a received ACK.
+	size_t numSentSegments; // Which of the outSegments have been send.
+	size_t windowSize;      // Size of the window.
+	size_t nextOffset;      // ???
 } CONNECTION;
 
+/**
+ * Data structure for one out segment. Out segments are segments which are not
+ * acknowledged. These segments are not send or waiting for acknowledgment
+ * (waiting in queue).
+ */
 typedef struct
 {
-	CnetTimerID timerId;
-	CnetAddr addr;
-	size_t size;
-	SEGMENT *seg;
+	CnetTimerID timerId; // The ID of the timer.
+	CnetAddr addr;       // The address.
+	size_t size;         // Size of the out segment
+	SEGMENT *seg;        // Pointer to the data stored in the segment.
 } OUT_SEGMENT;
 
-// a new entry is added whenever message from/to previously unknown host arrives
-HASHTABLE connections; // host address -> CONNECTION
 
+
+/**
+ * Stores the connections a host holds.
+ * A new entry is added whenever message from/to previously unknown host
+ * arrives.
+ * host address -> CONNECTION
+ */
+HASHTABLE connections;
+
+
+/**
+ * Creates a new connection for the given address. A connection contains
+ * a buffer for incoming data and data managing the buffered data (storage of
+ * the sequence numbers).
+ * 
+ * It also stores data for sending. It queues segments which are not send, need
+ * to be resend because the segments gets lost, or waiting for an acknowledgment.
+ * 
+ * Old connection data for a given address are overwritten.
+ * 
+ * @param addr The address to create a connection for.
+ * @return The created connection.
+ */
 CONNECTION *create_connection(CnetAddr addr)
 {
 	CONNECTION con;
@@ -65,6 +102,7 @@ CONNECTION *create_connection(CnetAddr addr)
 	char key[5];
 	int2string(key, addr);
 	hashtable_add(connections, key, &con, sizeof(con));
+	//TODO connection data are overwritten, but not deleted. Do we have a memory leak here?
 
 	CONNECTION *ret = hashtable_find(connections, key, NULL);
 
@@ -261,6 +299,12 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	transmit_segments(addr);
 }
 
+
+/**
+ * Initializes the transport layer.
+ *
+ * Must be called before the transport layer can be used after reboot.
+ */
 void transport_init()
 {
 	connections = hashtable_new(0);

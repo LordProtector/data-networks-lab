@@ -1,3 +1,11 @@
+/**
+ * buffer.h
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Header file for a buffer.
+ */
+
 #ifndef BUFFER_H_
 #define BUFFER_H_
 

@@ -1,3 +1,11 @@
+/**
+ * bitmap.h
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Header file for a bitmap.
+ */
+
 #ifndef BITMAP_H_
 #define BITMAP_H_
 
@@ -13,7 +21,7 @@ void bitmap_free(BITMAP b);
 
 void bitmap_set(BITMAP b, size_t pos);
 
-void bitmap_set_range(BITMAP b, size_t pos, size_t len);
+void bitmap_set_range(BITMAP b, size_t pos, size_t num);
 
 void bitmap_clear(BITMAP b, size_t pos);
 

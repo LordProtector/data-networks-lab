@@ -1,3 +1,12 @@
+/**
+ * link.h
+ *  
+ * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ *
+ * Header file for a sorted queue.
+ */
+
+
 #ifndef SQUEUE_H_
 #define SQUEUE_H_
 
