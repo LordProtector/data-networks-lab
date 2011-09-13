@@ -6,6 +6,11 @@
 #define MAX_SEGMENT_SIZE  sizeof(SEGMENT)
 #define MAX_DATAGRAM_SIZE sizeof(DATAGRAM)
 
+/**
+ * Maximal number of direct neighbours
+ */
+#define MAX_NEIGHBOURS 100
+
 #define LINK_TIMER EV_TIMER1
 #define TRANSPORT_TIMER EV_TIMER2
 #define ROUTING_TIMER EV_TIMER3
@@ -67,19 +72,19 @@ typedef struct
 
 typedef struct
 {
-  uint16_t seq_num;     // sequence number of routing
-  uint16_t ack_num;     // sequence number last continuously received routing info + 1
+  uint16_t seq_num;     // sequence number of routing segment
+  uint16_t ack_num;     // sequence number last received routing segment + 1
 } routing_header;
 
 typedef struct {
-	CnetAddr destAddr;
-	int weight;
-	int minMTU;
+	CnetAddr destAddr;	// destination address
+	int weight;			// weight to reach destination
+	int minMTU;			// minimal MTU on path to destination
 } DISTANCE_INFO;
 
 typedef struct {
-	int weight;
-	int minMTU;
+	int weight;			// weight to reach destination
+	int minMTU;			// minimal MTU on path to destination
 } ROUTING_ENTRY;
 
 typedef struct
@@ -93,16 +98,14 @@ typedef struct
 	VECTOR outRoutingSegments;		// Sent routing segements.
 	size_t nextSeqNum;     		    // Sequence number for next routing segment.
 	size_t nextAckNum;				// The next awaited sequence number. Initially it is 0.
-	
-	//SQUEUE inUnAckSeqNum;			// Not yet acknowledged out of order sequence numbers. 
 } NEIGHBOUR;
 
 typedef struct
 {
-	CnetTimerID timerId; // The ID of the timer to count the timeout.
-	int link;       	 // The destination link for the routing segment.
-	size_t size;         // Size of the out routing segment
-	ROUTING_SEGMENT *rSeg;        // Pointer to the data stored in the routing segment.
+	CnetTimerID timerId; 			// The ID of the timer to count the timeout.
+	int link;       	 			// The destination link for the routing segment.
+	size_t size;         			// Size of the out routing segment.
+	ROUTING_SEGMENT *rSeg;			// Pointer to the routing segment.
 } OUT_ROUTING_SEGMENT;
 
 

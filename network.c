@@ -42,7 +42,10 @@ void int2string(char* s, int i);
  */
 HASHTABLE forwarding_table;
 
-//TODO 
+/**
+ * Stores the distance information for each destination relative to
+ * all delivery of each direct neighbour.
+ */
 HASHTABLE routing_table;
 
 
@@ -181,16 +184,20 @@ CnetAddr network_get_address()
 /*					Routing								*/
 /**********************************************************/
 
-#define MAX_NEIGHBOURS 100
-
 /**
  * Timeout in usec when a routing segment needs to be resend.
  */
 #define ROUTING_TIMEOUT 1000000
 
-NEIGHBOUR *neighbours; //for simplicity neighbours[0] == myself (is empty)
+/**
+ * All direct neigbours of this node.
+ * For simplicity neighbours[0], refers to this node (just ignore it!).
+ */
+NEIGHBOUR *neighbours;
 
 /**
+ * Transmit given distance information over link.
+ * 
  * @param distance_info Distance information to send.
  * @param size Size of distance information.
  * @param link Link to send the distance information on.
@@ -218,6 +225,12 @@ void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
 	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
 }
 
+/**
+ * Broadcasts the given distance information to all neigbours.
+ * 
+ * @param distance_info Distance information to send.
+ * @param size Size of distance information.
+ */
 void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 {
 	int num_neighbours = link_num_links();
@@ -226,6 +239,17 @@ void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 	}
 }
 
+/**
+ * Receive a routing segment.
+ * 
+ * Reads the routing information from the routing segment,
+ * changes the routing table accordingly and potentially broadcasts
+ * changes in forwarding decisions. 
+ * Drops all out of order routing segments (relies on ordered resend).
+ * @param link Link which received the routing segment.
+ * @param data The received routing segment.
+ * @param size Size of the routing segment.
+ */
 void routing_receive(int link, char *data, size_t size)
 {
 	ROUTING_SEGMENT *rSeg = (ROUTING_SEGMENT *)data;
@@ -238,15 +262,6 @@ void routing_receive(int link, char *data, size_t size)
 	/* process acknowledgement */
 	if(nb.nextAckNum == rSeg->header.seq_num) {
 		nb.nextAckNum++;
-		//~ while(nb.nextAckNum == squeue_peek(nb.inUnAckSeqNum)) {
-			//~ nb.nextAckNum++;
-			//~ squeue_pop(nb.inUnAckSeqNum);
-		//~ }
-	}
-	else {
-		//~ if(!squeue_contains(nb.inUnAckSeqNum)) {
-			//~ squeue_insert(nb.inUnAckSeqNum, rSeg->header.seq_num;
-		//~ }
 	}
 	
 	/* process routing information */
@@ -266,13 +281,20 @@ void routing_receive(int link, char *data, size_t size)
 }
 
 /**
- * Updates the routing table with the given distance information.
+ * Updates the routing table with the given distance information
+ * and generates own new routing information to broadcast it to the
+ * neighbours if the update led to changes in the forward decision.
+ * Returns whether the update led to changes in the forward decision.
+ * @param link Link that received the incomming distance information.
+ * @param inDistInfo Incomming distance information.
+ * @param outDistInfo Outgoing distance information.
  */
 bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo)
 {
 	ROUTING_ENTRY *entry = routing_lookup(inDistInfo.destAddr);
 	int bestChoice = 0, bestWeigth = INT_MAX;
 	if(NULL == entry) {
+		/* new routing table entry */
 		char key[5];
 		int2string(key, addr);
 		ROUTING_ENTRY[link_num_links()] newEntry;
@@ -293,9 +315,11 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	
 	assert(NULL != entry);
 	
+	/* update routing table */
 	entry[link].weight = inDistInfo.weigth + get_weigth(link);
 	entry[link].minMTU = MIN(inDistInfo.minMTU, link_get_mtu(link);
 	
+	/* Did the update led to changes in the forward decision? */
 	bool bestChoiceChanged = (bestChoice == link);
 	if(bestChoiceChanged) {
 		outDistInfo->destAddr = inDistInfo.destAddr;
@@ -321,6 +345,7 @@ int get_weigth(int link)
 
 /**
  * Looks up an address in the routing table.
+ * @param addr Address to look up.
  */
 ROUTING_ENTRY *routing_lookup(CnetAddr addr)
 {
@@ -329,9 +354,14 @@ ROUTING_ENTRY *routing_lookup(CnetAddr addr)
 	return (ROUTING_ENTRY *) hashtable_find(routing_table, key, NULL);
 }
 	
-
+/**
+ * Initializes the routing algorithm.
+ * 
+ * Must be called before the routing algorithm can be used after reboot.
+ */
 void routing_init()
 {
+	/* initialise data structures */
 	int num_neighbours = link_num_links();
 	neighbours = malloc(sizeof(*neighbours) * (num_neighbours + 1));
 	
@@ -341,7 +371,8 @@ void routing_init()
 		//neighbours[i].inUnAckSeqNum = squeue_new();
 		neighbours[i].outRoutingSegments = vector_new();
 	}
-		
+	
+	/* distribute initial distance information */
 	DISTANCE_INFO[1] distInfo;
 	distInfo[0].weight = 0;
 	distInfo[0].minMTU = INT_MAX;
