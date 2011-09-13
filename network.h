@@ -14,5 +14,6 @@ void network_receive(int, char *, size_t);
 void network_init();
 
 int network_lookup(CnetAddr);
+CnetAddr network_get_address();
 
 #endif
