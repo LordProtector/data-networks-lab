@@ -82,7 +82,7 @@ typedef struct
 } OUT_SEGMENT;
 
 
-CONNECTION* transport_connection_lookup(CnetAddr addr);
+CONNECTION* get_connection(CnetAddr addr);
 
 /**
  * Stores the connections a host holds.
@@ -212,7 +212,7 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
  */
 void transmit_segment(OUT_SEGMENT *outSeg)
 {
-	CONNECTION *con = transport_connection_lookup(outSeg->addr);
+	CONNECTION *con = get_connection(outSeg->addr);
 
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
@@ -227,9 +227,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
  */
 void transmit_segments(CnetAddr addr)
 {
-	//load connection
-	CONNECTION *con = transport_connection_lookup(addr);
-	assert(con != NULL);
+	CONNECTION *con = get_connection(addr);
 
   //window not saturated and segments available
 	while (con->numSentSegments < con->windowSize &&
@@ -259,12 +257,7 @@ void transmit_segments(CnetAddr addr)
  */
 void transport_transmit(CnetAddr addr, char *data, size_t size)
 {
-	//load connection
-	CONNECTION *con = transport_connection_lookup(addr);
-
-	if (con == NULL) {
-		con = create_connection(addr);
-	}
+	CONNECTION *con = get_connection(addr);
 
 	size_t remainingBytes = size;
 	size_t processedBytes = 0;
@@ -318,12 +311,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
  */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
-	//load connection
-	CONNECTION *con = transport_connection_lookup(addr);
-
-	if (con == NULL) {
-		con = create_connection(addr);
-	}
+	CONNECTION *con = get_connection(addr);
 
 	SEGMENT *segment = (SEGMENT *)data;
 	segment_header header;
@@ -386,16 +374,22 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 }
 
 /**
- * Lookup address in connections table and return the corresponding CONNECTION.
+ * Lookup address in the connections table.
+ * If it does not exists a new entry is created.
  * 
  * @param addr The address to look up.
  * @return The corresponding CONNECTION from the connection table.
  */
-CONNECTION* transport_connection_lookup(CnetAddr addr)
+CONNECTION* get_connection(CnetAddr addr)
 {
 	char key[5];
 	int2string(key, addr);
 	CONNECTION *con = hashtable_find(connections, key, NULL);
+
+	if (con == NULL) {
+		con = create_connection(addr);
+	}
+	
 	return con;
 }
 
