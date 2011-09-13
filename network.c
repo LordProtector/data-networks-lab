@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
@@ -38,29 +39,28 @@
 void int2string(char* s, int i);
 
 /**
+ * An entry of the routing table
+ */
+typedef struct {
+	int weight;			// weight to reach destination
+	int minMTU;			// minimal MTU on path to destination
+} ROUTING_ENTRY;
+
+/**
  * Stores which route a packet should travel for a given destination.
+ * 
+ * destination address -> next hop
  */
 HASHTABLE forwarding_table;
 
 /**
  * Stores the distance information for each destination relative to
  * all delivery of each direct neighbour.
+ * 
+ * destination address, outgoing link -> ROUTING_ENTRY
  */
 HASHTABLE routing_table;
 
-
-
-/**
- * Takes a segment and delivers it to addr.
- * @param addr destination address
- * @param data segment to send
- * @param size size of segment
- */
-void network_transmit(CnetAddr addr, char *data, size_t size)
-{
-	int link =  network_lookup(addr);
-	transmit_datagram(link, false, addr, data, size);
-}
 
 /**
  * Takes a segment, adds datagram header and passes datagram
@@ -88,6 +88,18 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
 
 	/* send datagram */
 	link_transmit(link, (char*) &datagram, datagramSize);
+}
+
+/**
+ * Takes a segment and delivers it to addr.
+ * @param addr destination address
+ * @param data segment to send
+ * @param size size of segment
+ */
+void network_transmit(CnetAddr addr, char *data, size_t size)
+{
+	int link =  network_lookup(addr);
+	transmit_datagram(link, false, addr, data, size);
 }
 
 /**
@@ -189,11 +201,32 @@ CnetAddr network_get_address()
  */
 #define ROUTING_TIMEOUT 1000000
 
+
+typedef struct
+{
+	VECTOR outRoutingSegments;		// Sent routing segements.
+	size_t nextSeqNum;     		    // Sequence number for next routing segment.
+	size_t nextAckNum;				// The next awaited sequence number. Initially it is 0.
+} NEIGHBOUR;
+
+typedef struct
+{
+	CnetTimerID timerId; 			// The ID of the timer to count the timeout.
+	int link;       	 			// The destination link for the routing segment.
+	size_t size;         			// Size of the out routing segment.
+	ROUTING_SEGMENT *rSeg;			// Pointer to the routing segment.
+} OUT_ROUTING_SEGMENT;
+
 /**
  * All direct neigbours of this node.
  * For simplicity neighbours[0], refers to this node (just ignore it!).
  */
 NEIGHBOUR *neighbours;
+
+bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo);
+ROUTING_ENTRY *routing_lookup(CnetAddr addr);
+int get_weight(int link);
+
 
 /**
  * Transmit given distance information over link.
@@ -219,7 +252,7 @@ void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
 	int pos = vector_nitems(nb.outRoutingSegments);
 	vector_append(nb.outRoutingSegments, outSeg, sizeof(*outSeg));
 	free(outSeg);
-	outSeg = vector_peek(nb.outRoutingSegments, pos);
+	outSeg = vector_peek(nb.outRoutingSegments, pos, NULL);
 
 	link_transmit(link, (char *)outSeg->rSeg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
@@ -257,11 +290,16 @@ void routing_receive(int link, char *data, size_t size)
 	
 	if(nb.nextAckNum != rSeg->header.seq_num) {
 		return; //ignore out of order routing segment
+		
 	}
 	
 	/* process acknowledgement */
 	if(nb.nextAckNum == rSeg->header.seq_num) {
 		nb.nextAckNum++;
+		OUT_ROUTING_SEGMENT *ackSeg = vector_remove(nb.outRoutingSegments, 0, NULL);
+		CNET_stop_timer(ackSeg->timerId);
+		free(ackSeg->rSeg);
+		free(ackSeg);
 	}
 	
 	/* process routing information */
@@ -292,17 +330,17 @@ void routing_receive(int link, char *data, size_t size)
 bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo)
 {
 	ROUTING_ENTRY *entry = routing_lookup(inDistInfo.destAddr);
-	int bestChoice = 0, bestWeigth = INT_MAX;
+	int bestChoice = 0, bestWeight = INT_MAX;
 	if(NULL == entry) {
 		/* new routing table entry */
 		char key[5];
-		int2string(key, addr);
-		ROUTING_ENTRY[link_num_links()] newEntry;
+		int2string(key, inDistInfo.destAddr);
+		ROUTING_ENTRY newEntry[link_num_links()];
 		for(int i=0; i<link_num_links(); i++) {
 			newEntry[i].weight = INT_MAX;
 			newEntry[i].minMTU = INT_MAX;
 		}
-		hashtable_add(routing_table, key, newEntry, sizeof(entry);
+		hashtable_add(routing_table, key, newEntry, sizeof(entry));
 		entry = routing_lookup(inDistInfo.destAddr);
 		bestChoice = link;
 	}
@@ -310,14 +348,15 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 		for(int i=0; i<link_num_links(); i++) {
 			if(entry[i].weight < bestWeight)
 				bestChoice = i;
+				bestWeight = entry[i].weight;
 		}
 	}
 	
 	assert(NULL != entry);
 	
 	/* update routing table */
-	entry[link].weight = inDistInfo.weigth + get_weigth(link);
-	entry[link].minMTU = MIN(inDistInfo.minMTU, link_get_mtu(link);
+	entry[link].weight = inDistInfo.weight + get_weight(link);
+	entry[link].minMTU = MIN(inDistInfo.minMTU, link_get_mtu(link));
 	
 	/* Did the update led to changes in the forward decision? */
 	bool bestChoiceChanged = (bestChoice == link);
@@ -338,7 +377,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
  * 
  * @param link Link.
  */
-int get_weigth(int link)
+int get_weight(int link)
 {
 	return 10000000 * 1.0 / link_get_bandwidth(link);
 }
@@ -373,7 +412,7 @@ void routing_init()
 	}
 	
 	/* distribute initial distance information */
-	DISTANCE_INFO[1] distInfo;
+	DISTANCE_INFO distInfo[1];
 	distInfo[0].weight = 0;
 	distInfo[0].minMTU = INT_MAX;
 	distInfo[0].destAddr = network_get_address();

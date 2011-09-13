@@ -82,31 +82,11 @@ typedef struct {
 	int minMTU;			// minimal MTU on path to destination
 } DISTANCE_INFO;
 
-typedef struct {
-	int weight;			// weight to reach destination
-	int minMTU;			// minimal MTU on path to destination
-} ROUTING_ENTRY;
-
 typedef struct
 {
  routing_header header;
   DISTANCE_INFO distance_info[MAX_NEIGHBOURS];
 } ROUTING_SEGMENT;
-
-typedef struct
-{
-	VECTOR outRoutingSegments;		// Sent routing segements.
-	size_t nextSeqNum;     		    // Sequence number for next routing segment.
-	size_t nextAckNum;				// The next awaited sequence number. Initially it is 0.
-} NEIGHBOUR;
-
-typedef struct
-{
-	CnetTimerID timerId; 			// The ID of the timer to count the timeout.
-	int link;       	 			// The destination link for the routing segment.
-	size_t size;         			// Size of the out routing segment.
-	ROUTING_SEGMENT *rSeg;			// Pointer to the routing segment.
-} OUT_ROUTING_SEGMENT;
 
 
 /* Data structures for link layer. */
