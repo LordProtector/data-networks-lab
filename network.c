@@ -227,9 +227,18 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 ROUTING_ENTRY *routing_lookup(CnetAddr addr);
 int get_weight(int link);
 
+/**
+ * Hands routing segment to the link layer (!) and starts timer.
+ */
+void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
+{
+	link_transmit(outSeg->link, (char *)outSeg->rSeg, outSeg->size);
+	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
+}
 
 /**
- * Transmit given distance information over link.
+ * Packs distance information and an outgoing link 
+ * as a routing segment and delivers it.
  * 
  * @param distance_info Distance information to send.
  * @param size Size of distance information.
@@ -254,8 +263,7 @@ void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
 	free(outSeg);
 	outSeg = vector_peek(nb.outRoutingSegments, pos, NULL);
 
-	link_transmit(link, (char *)outSeg->rSeg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
+	transmit_routing_segment(outSeg);
 }
 
 /**
