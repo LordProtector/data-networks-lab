@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdbool.h>
 #include "squeue.h"
 
 /**
@@ -177,6 +178,25 @@ int squeue_peek(SQUEUE s)
   else {
     return -1;
   }
+}
+
+/** Checks whether the given sorted queue contains data.
+ *
+ * @param s Handle to the sorted queue.
+ * @param data The data to be searched.
+ * @return True if data is in queue, false otherwise.
+ */
+bool squeue_contains(SQUEUE s, int data)
+{
+	_SQUEUE *squeue = (_SQUEUE *)s;
+  ENTRY *iter;
+
+	for (iter = squeue->head; iter != NULL && iter->data <= data; iter = iter->next) {
+		if (iter->data == data) {
+			return true;
+		}
+	}
+	return false;
 }
 
 
