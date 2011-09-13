@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
+#include <sys/time.h>
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
@@ -66,6 +68,9 @@ typedef struct
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
 	size_t nextOffset;      // The next offset the connection is waiting for. Initially it is 0.
+	
+	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
+	CnetTime deviation;		// Safety margin for the variation in estimatedRTT.
 } CONNECTION;
 
 /**
@@ -75,14 +80,16 @@ typedef struct
  */
 typedef struct
 {
-	CnetTimerID timerId; // The ID of the timer to count the timeout.
-	CnetAddr addr;       // The destination address of the segment.
-	size_t size;         // Size of the out segment
-	SEGMENT *seg;        // Pointer to the data stored in the segment.
+	struct timeval sendTime;  // Time when the segment was send last.
+	CnetTimerID timerId;      // The ID of the timer to count the timeout.
+	CnetAddr addr;            // The destination address of the segment.
+	size_t size;              // Size of the out segment
+	SEGMENT *seg;             // Pointer to the data stored in the segment.
 } OUT_SEGMENT;
 
 
 CONNECTION* get_connection(CnetAddr addr);
+CnetTime get_timeout(CONNECTION *con);
 
 /**
  * Stores the connections a host holds.
@@ -117,6 +124,8 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.numSentSegments = 0;
 	con.windowSize = MAX_WINDOW_SIZE;
 	con.nextOffset = 0;
+	con.estimatedRTT = TRANSPORT_TIMEOUT;
+	con.deviation = TRANSPORT_TIMEOUT;
 
 	char key[5];
 	int2string(key, addr);
@@ -143,6 +152,65 @@ bool acknowledged(size_t offset, size_t ackOffset)
 
 	return (offset <= ackOffset && ackOffset - offset < MAX_WINDOW_OFFSET) ||
 				 ((MAX_SEGMENT_OFFSET - offset) + ackOffset < MAX_WINDOW_OFFSET);
+}
+
+/**
+ * Updates the estimatedRTT and the Deviation value
+ * of the given connection with the given sampleRTT.
+ * The calculation to estimate the RTT is based on
+ * exponential weighted moving average.
+ */
+void update_rtt(CONNECTION *con, CnetTime sampleRTT)
+{
+	double x = 0.125;
+	double y = 0.25;
+	
+	printf("update_rtt(sampleRTT: %d)\n", sampleRTT);
+	printf("old estRTT: %d, old dev: %d, timeout: %d\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	
+	con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
+	con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
+	printf("new estRTT: %d, new dev: %d, timeout: %d\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
+}
+
+/**
+ * Returns and proper timeout value for the given connection.
+ */
+CnetTime get_timeout(CONNECTION *con)
+{
+	//return TRANSPORT_TIMEOUT;
+	return con->estimatedRTT + 4 * con->deviation;
+}
+
+/**
+ * Subtract the `struct timeval' values X and Y,
+ * storing the result in RESULT.
+ * Return 1 if the difference is negative, otherwise 0. 
+ * 
+ * Source: http://www.gnu.org/s/hello/manual/libc/Elapsed-Time.html
+ */
+int timeval_subtract (result, x, y)
+  struct timeval *result, *x, *y;
+{
+	/* Perform the carry for the later subtraction by updating y. */
+	if (x->tv_usec < y->tv_usec) {
+	 int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+	 y->tv_usec -= 1000000 * nsec;
+	 y->tv_sec += nsec;
+	}
+	if (x->tv_usec - y->tv_usec > 1000000) {
+	 int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+	 y->tv_usec += 1000000 * nsec;
+	 y->tv_sec -= nsec;
+	}
+
+	/* Compute the time remaining to wait.
+	  tv_usec is certainly positive. */
+	result->tv_sec = x->tv_sec - y->tv_sec;
+	result->tv_usec = x->tv_usec - y->tv_usec;
+
+	/* Return 1 if result is negative. */
+	return x->tv_sec < y->tv_sec;
 }
 
 /**
@@ -216,7 +284,8 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, TRANSPORT_TIMEOUT, (CnetData) outSeg);
+	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
+	gettimeofday(&outSeg->sendTime, NULL);
 }
 
 /**
@@ -311,6 +380,9 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
  */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
+	struct timeval recvTime, diff;
+	gettimeofday(&recvTime, NULL);
+	
 	CONNECTION *con = get_connection(addr);
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -350,6 +422,11 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	if(vector_nitems(con->outSegments) > 0) {
 		size_t segmentSize;
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+		
+		timeval_subtract(&diff, &recvTime, &outSeg->sendTime);
+		CnetTime sampleRTT = diff.tv_sec * 1000000 + diff.tv_usec;
+		update_rtt(con, sampleRTT);
+		
 		SEGMENT *seg = outSeg->seg;
 		size_t endOffset = seg->header.offset + segmentSize - sizeof(seg->header);
 		endOffset %= MAX_SEGMENT_OFFSET;
