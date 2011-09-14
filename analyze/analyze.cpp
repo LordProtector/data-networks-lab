@@ -148,7 +148,7 @@ void Analyze::writeGnuplut(const string& output)
 	fstr.open((output + ".gnuplot").c_str(), fstream::out);
 	
 	fstr << "set xlabel \"time\"" << endl;
-	fstr << "set ylabel \"msgs\"" << endl;
+	fstr << "set ylabel \"# msgs\"" << endl;
 
 	fstr << "set title \"Messages\"" << endl;
 
@@ -176,7 +176,7 @@ void Analyze::writeGnuplut(const string& output)
 	fstr << "reset" << endl;
 	
 	fstr << "set xlabel \"time\"" << endl;
-	fstr << "set ylabel \"msgs\"" << endl;
+	fstr << "set ylabel \"latency [ms]\"" << endl;
 	
 	fstr << "set title \"Latency\"" << endl;
 	
@@ -203,7 +203,7 @@ void Analyze::writeGnuplut(const string& output)
 	fstr << "reset" << endl;
 	
 	fstr << "set xlabel \"time\"" << endl;
-	fstr << "set ylabel \"msgs\"" << endl;
+	fstr << "set ylabel \"throughput [kB/s]\"" << endl;
 	
 	fstr << "set title \"Throughput\"" << endl;
 	

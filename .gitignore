@@ -4,3 +4,8 @@
 tmp/
 notes/
 analyze/build
+
+*.aux
+*.log
+*.backup
+*.out

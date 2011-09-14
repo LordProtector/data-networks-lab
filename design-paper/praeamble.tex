@@ -1,0 +1,65 @@
+
+
+
+% \usepackage{ngerman}  % german documents
+\usepackage{graphicx}  % import graphics einbinden
+\usepackage{listings}  % support source code listing
+\usepackage{amsmath}  % math stuff
+\usepackage{amssymb} % 
+\usepackage{a4wide} % wide pages
+\usepackage{fancyhdr} % nice headers
+\lstset{basicstyle=\footnotesize,language=Python,numbers=left, numberstyle=\tiny, stepnumber=5,firstnumber=0, numbersep=5pt} % set up listings
+\pagestyle{fancy}             % header
+\setlength{\parindent}{10pt}   % no indentation
+
+          
+\usepackage[bookmarks=true]{hyperref}
+\hypersetup{breaklinks=true,
+bookmarksopen=true,
+bookmarksnumbered=true,
+linkcolor=blue,%blue
+urlcolor=blue,%blue
+citecolor=blue,%blue
+colorlinks=true}
+
+\usepackage[none]{hyphenat}
+\sloppy
+
+% change enums style: first level (a), (b), (c)           
+\renewcommand{\labelenumi}{(\alph{enumi})}
+\renewcommand{\labelenumii}{(\arabic{enumii})}
+
+%-------------------------------------------------------------------------------
+% command to highlight fixmes
+\newcommand{\fixme}[1]{\textcolor{red}{FIXME #1}}
+
+%-------------------------------------------------------------------------------
+% heading for caption and formatting
+\newcommand{\hcaption}[1]{\textbf{#1}}
+\usepackage[]{caption}
+\captionsetup{labelfont=bf,font={sf,footnotesize},format=plain}
+
+%lecture name
+\newcommand{\lecture}{
+        Data Networking
+}           
+
+%assignment iteration
+\ifthenelse{\boolean{m2}}{
+  \newcommand{\assignment}{
+          Layering and Protocol Design for Milestone 2
+  }
+}{
+ \newcommand{\assignment}{
+         Layering and Protocol Design for Milestone 3
+ }
+}
+
+%set up names, matricle number, and email
+\newcommand{\authors}{
+  \begin{tabular}{rl}
+    {Alexander Bunte}&(\fixme{number})\\
+    {Jonas B\"urse}&(2519546)\\
+    {Stefan Tombers}&(\fixme{number})
+  \end{tabular}
+}
