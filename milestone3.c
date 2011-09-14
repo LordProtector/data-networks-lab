@@ -87,6 +87,20 @@ static EVENT_HANDLER(transport_timeout)
 }
 
 /**
+ * routing_timeout() event-handler.
+ *
+ * It is called whenever a timeout indicating loss of a routing segment occurs,
+ * which means it should be retransmitted.
+ * It calls <code>transmit_routing_segment()</code>.
+ */
+static EVENT_HANDLER(routing_timeout)
+{
+  transmit_routing_segment((void *)data); // data = pointer to OUT_ROUTING_SEGMENT
+}
+
+
+
+/**
  * reboot_node() event-handler.
  *
  * It is always the first function to be called by the cnet schedule.
@@ -98,6 +112,7 @@ EVENT_HANDLER(reboot_node)
 	CHECK(CNET_set_handler(EV_PHYSICALREADY,    physical_ready, 0));
 	CHECK(CNET_set_handler(LINK_TIMER,          link_ready, 0));
 	CHECK(CNET_set_handler(TRANSPORT_TIMER,     transport_timeout, 0));
+	CHECK(CNET_set_handler(ROUTING_TIMER,		routing_timeout, 0));
 
 	link_init();
 	network_init();

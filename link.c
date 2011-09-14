@@ -354,6 +354,32 @@ void link_receive(int link, char *data, size_t size)
 }
 
 /**
+ * Returns the bandwidth for the given link.
+ */
+int link_get_bandwidth(int link) 
+{
+	assert(link <= nodeinfo.nlinks);
+	return linkinfo[link].bandwidth;
+}
+
+/**
+ * Returns the MTU for the given link.
+ */
+int link_get_mtu(int link) 
+{
+	assert(link <= nodeinfo.nlinks);
+	return linkinfo[link].mtu;
+}
+
+/**
+ * Returns the number of direct neighbours.
+ */
+int link_num_links()
+{
+	return nodeinfo.nlinks;
+}
+
+/**
  * Initializes the link layer.
  *
  * Must be called before the link layer can be used after reboot.

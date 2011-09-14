@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
@@ -38,28 +39,46 @@
 void int2string(char* s, int i);
 
 /**
+ * An entry of the routing table
+ */
+typedef struct {
+	int weight;			// weight to reach destination
+	int minMTU;			// minimal MTU on path to destination
+} ROUTING_ENTRY;
+
+/**
  * Stores which route a packet should travel for a given destination.
+ * 
+ * destination address -> next hop
  */
 HASHTABLE forwarding_table;
 
 /**
- * Takes a segment, add datagram header and passes datagram
- * to the link layer.
- * @param addr destination address
- * @param data segment to send
- * @param size size of segment
+ * Stores the distance information for each destination relative to
+ * all delivery of each direct neighbour.
+ * 
+ * destination address, outgoing link -> ROUTING_ENTRY
  */
-void network_transmit(CnetAddr addr, char *data, size_t size)
+HASHTABLE routing_table;
+
+
+/**
+ * Takes a segment, adds datagram header and passes datagram
+ * to the link layer.
+ * @param link    link to send the segment on
+ * @param routing segment contains routing data
+ * @param addr    destination address
+ * @param data    segment to send
+ * @param size    size of segment
+ */
+void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t size)
 {
-
-	int link =  network_lookup(addr);
-
 	/* datagram header */
 	datagram_header header;
 	header.srcaddr = nodeinfo.address;
 	header.destaddr = addr;
 	header.hoplimit = HOP_LIMIT;
-	header.routing = false;
+	header.routing = routing;
 
 	/* assemble datagram */
 	DATAGRAM datagram;
@@ -69,6 +88,18 @@ void network_transmit(CnetAddr addr, char *data, size_t size)
 
 	/* send datagram */
 	link_transmit(link, (char*) &datagram, datagramSize);
+}
+
+/**
+ * Takes a segment and delivers it to addr.
+ * @param addr destination address
+ * @param data segment to send
+ * @param size size of segment
+ */
+void network_transmit(CnetAddr addr, char *data, size_t size)
+{
+	int link =  network_lookup(addr);
+	transmit_datagram(link, false, addr, data, size);
 }
 
 /**
@@ -98,7 +129,7 @@ void network_receive(int link, char *data, size_t size)
 	}
 	else {
 		/* datagram destination = foreign node -> forward */
-		int link =network_lookup(destaddr);
+		int link = network_lookup(destaddr);
 
 		datagram->header.hoplimit--;
 		link_transmit(link, (char*) datagram, size);
@@ -150,4 +181,249 @@ int network_lookup(CnetAddr addr)
 	char key[5];
 	int2string(key, addr);
 	return *((int*) hashtable_find(forwarding_table, key, NULL));
+}
+
+/**
+ * Returns a node's own network address.
+ */
+CnetAddr network_get_address()
+{
+	return nodeinfo.address;
+}
+
+
+/**********************************************************/
+/*					Routing								*/
+/**********************************************************/
+
+/**
+ * Timeout in usec when a routing segment needs to be resend.
+ */
+#define ROUTING_TIMEOUT 1000000
+
+
+typedef struct
+{
+	VECTOR outRoutingSegments;		// Sent routing segements.
+	size_t nextSeqNum;     		    // Sequence number for next routing segment.
+	size_t nextAckNum;				// The next awaited sequence number. Initially it is 0.
+} NEIGHBOUR;
+
+typedef struct
+{
+	CnetTimerID timerId; 			// The ID of the timer to count the timeout.
+	int link;       	 			// The destination link for the routing segment.
+	size_t size;         			// Size of the out routing segment.
+	ROUTING_SEGMENT *rSeg;			// Pointer to the routing segment.
+} OUT_ROUTING_SEGMENT;
+
+/**
+ * All direct neigbours of this node.
+ * For simplicity neighbours[0], refers to this node (just ignore it!).
+ */
+NEIGHBOUR *neighbours;
+
+bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo);
+ROUTING_ENTRY *routing_lookup(CnetAddr addr);
+int get_weight(int link);
+
+/**
+ * Hands routing segment to the link layer (!) and starts timer.
+ */
+void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
+{
+	link_transmit(outSeg->link, (char *)outSeg->rSeg, outSeg->size);
+	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
+}
+
+/**
+ * Packs distance information and an outgoing link 
+ * as a routing segment and delivers it.
+ * 
+ * @param distance_info Distance information to send.
+ * @param size Size of distance information.
+ * @param link Link to send the distance information on.
+ */
+void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
+{
+	NEIGHBOUR nb = neighbours[link];
+	
+	ROUTING_SEGMENT *rSeg = malloc(sizeof(*rSeg));
+	rSeg->header.seq_num = nb.nextSeqNum++;
+	rSeg->header.ack_num = nb.nextAckNum;
+	memcpy(rSeg->distance_info, distance_info, size);
+	
+	OUT_ROUTING_SEGMENT *outSeg = malloc(sizeof(*outSeg));
+	outSeg->link = link;
+	outSeg->rSeg = rSeg;
+	outSeg->size = size + sizeof(routing_header);
+	
+	int pos = vector_nitems(nb.outRoutingSegments);
+	vector_append(nb.outRoutingSegments, outSeg, sizeof(*outSeg));
+	free(outSeg);
+	outSeg = vector_peek(nb.outRoutingSegments, pos, NULL);
+
+	transmit_routing_segment(outSeg);
+}
+
+/**
+ * Broadcasts the given distance information to all neigbours.
+ * 
+ * @param distance_info Distance information to send.
+ * @param size Size of distance information.
+ */
+void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
+{
+	int num_neighbours = link_num_links();
+	for(int i=1; i<=num_neighbours; i++) {
+		transmit_distance_info(distance_info, size, i);
+	}
+}
+
+/**
+ * Receive a routing segment.
+ * 
+ * Reads the routing information from the routing segment,
+ * changes the routing table accordingly and potentially broadcasts
+ * changes in forwarding decisions. 
+ * Drops all out of order routing segments (relies on ordered resend).
+ * @param link Link which received the routing segment.
+ * @param data The received routing segment.
+ * @param size Size of the routing segment.
+ */
+void routing_receive(int link, char *data, size_t size)
+{
+	ROUTING_SEGMENT *rSeg = (ROUTING_SEGMENT *)data;
+	NEIGHBOUR nb = neighbours[link];
+	
+	if(nb.nextAckNum != rSeg->header.seq_num) {
+		return; //ignore out of order routing segment
+		
+	}
+	
+	/* process acknowledgement */
+	if(nb.nextAckNum == rSeg->header.seq_num) {
+		nb.nextAckNum++;
+		OUT_ROUTING_SEGMENT *ackSeg = vector_remove(nb.outRoutingSegments, 0, NULL);
+		CNET_stop_timer(ackSeg->timerId);
+		free(ackSeg->rSeg);
+		free(ackSeg);
+	}
+	
+	/* process routing information */
+	int distInfoLength = (size - sizeof(routing_header)) / sizeof(DISTANCE_INFO);
+	DISTANCE_INFO sendDistInfo[distInfoLength];
+	int updates = 0;
+	for(int i=0; i<distInfoLength; i++) {
+		DISTANCE_INFO distInfo = rSeg->distance_info[i];
+		if(update_routing_table(link, distInfo, &(sendDistInfo[updates]))) {
+			updates++;
+		}
+	}
+	
+	/* broadcast distance updates */
+	if(updates > 0)
+		broadcast_distance_info(sendDistInfo, updates * sizeof(DISTANCE_INFO));
+}
+
+/**
+ * Updates the routing table with the given distance information
+ * and generates own new routing information to broadcast it to the
+ * neighbours if the update led to changes in the forward decision.
+ * Returns whether the update led to changes in the forward decision.
+ * @param link Link that received the incomming distance information.
+ * @param inDistInfo Incomming distance information.
+ * @param outDistInfo Outgoing distance information.
+ */
+bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo)
+{
+	ROUTING_ENTRY *entry = routing_lookup(inDistInfo.destAddr);
+	int bestChoice = 0, bestWeight = INT_MAX;
+	if(NULL == entry) {
+		/* new routing table entry */
+		char key[5];
+		int2string(key, inDistInfo.destAddr);
+		ROUTING_ENTRY newEntry[link_num_links()];
+		for(int i=0; i<link_num_links(); i++) {
+			newEntry[i].weight = INT_MAX;
+			newEntry[i].minMTU = INT_MAX;
+		}
+		hashtable_add(routing_table, key, newEntry, sizeof(entry));
+		entry = routing_lookup(inDistInfo.destAddr);
+		bestChoice = link;
+	}
+	else {
+		for(int i=0; i<link_num_links(); i++) {
+			if(entry[i].weight < bestWeight)
+				bestChoice = i;
+				bestWeight = entry[i].weight;
+		}
+	}
+	
+	assert(NULL != entry);
+	
+	/* update routing table */
+	entry[link].weight = inDistInfo.weight + get_weight(link);
+	entry[link].minMTU = MIN(inDistInfo.minMTU, link_get_mtu(link));
+	
+	/* Did the update led to changes in the forward decision? */
+	bool bestChoiceChanged = (bestChoice == link);
+	if(bestChoiceChanged) {
+		outDistInfo->destAddr = inDistInfo.destAddr;
+		outDistInfo->weight = entry[link].weight;
+		outDistInfo->minMTU = entry[link].minMTU;
+	}
+
+	/* enable message delivery to that node */
+	CNET_enable_application(inDistInfo.destAddr);
+	
+	return bestChoiceChanged;
+}
+
+/**
+ * Calculates costs for transmiting data over given link.
+ * 
+ * @param link Link.
+ */
+int get_weight(int link)
+{
+	return 10000000 * 1.0 / link_get_bandwidth(link);
+}
+
+/**
+ * Looks up an address in the routing table.
+ * @param addr Address to look up.
+ */
+ROUTING_ENTRY *routing_lookup(CnetAddr addr)
+{
+	char key[5];
+	int2string(key, addr);
+	return (ROUTING_ENTRY *) hashtable_find(routing_table, key, NULL);
+}
+	
+/**
+ * Initializes the routing algorithm.
+ * 
+ * Must be called before the routing algorithm can be used after reboot.
+ */
+void routing_init()
+{
+	/* initialise data structures */
+	int num_neighbours = link_num_links();
+	neighbours = malloc(sizeof(*neighbours) * (num_neighbours + 1));
+	
+	for(int i=0; i<=num_neighbours; i++) {
+		neighbours[i].nextSeqNum = 0;
+		neighbours[i].nextAckNum = 0;
+		//neighbours[i].inUnAckSeqNum = squeue_new();
+		neighbours[i].outRoutingSegments = vector_new();
+	}
+	
+	/* distribute initial distance information */
+	DISTANCE_INFO distInfo[1];
+	distInfo[0].weight = 0;
+	distInfo[0].minMTU = INT_MAX;
+	distInfo[0].destAddr = network_get_address();
+	
+	broadcast_distance_info(distInfo, sizeof(*distInfo));
 }

@@ -6,8 +6,14 @@
 #define MAX_SEGMENT_SIZE  sizeof(SEGMENT)
 #define MAX_DATAGRAM_SIZE sizeof(DATAGRAM)
 
+/**
+ * Maximal number of direct neighbours
+ */
+#define MAX_NEIGHBOURS 100
+
 #define LINK_TIMER EV_TIMER1
 #define TRANSPORT_TIMER EV_TIMER2
+#define ROUTING_TIMER EV_TIMER3
 
 /**
  * Computes the smaller of two numbers
@@ -62,7 +68,28 @@ typedef struct
 } DATAGRAM;
 
 
-/* Data structure for link layer. */
+/* Data strctures for routing. */
+
+typedef struct
+{
+  uint16_t seq_num;     // sequence number of routing segment
+  uint16_t ack_num;     // sequence number last received routing segment + 1
+} routing_header;
+
+typedef struct {
+	CnetAddr destAddr;	// destination address
+	int weight;			// weight to reach destination
+	int minMTU;			// minimal MTU on path to destination
+} DISTANCE_INFO;
+
+typedef struct
+{
+ routing_header header;
+  DISTANCE_INFO distance_info[MAX_NEIGHBOURS];
+} ROUTING_SEGMENT;
+
+
+/* Data structures for link layer. */
 
 typedef struct
 {
