@@ -68,7 +68,7 @@ typedef struct
 } DATAGRAM;
 
 
-/* Data strctures for routing. */
+/* Data structures for routing. */
 
 typedef struct
 {

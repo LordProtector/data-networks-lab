@@ -301,7 +301,7 @@ void routing_receive(int link, char *data, size_t size)
 		
 	}
 	
-	/* process acknowledgement */
+	/* process acknowledgment */
 	if(nb.nextAckNum == rSeg->header.seq_num) {
 		nb.nextAckNum++;
 		OUT_ROUTING_SEGMENT *ackSeg = vector_remove(nb.outRoutingSegments, 0, NULL);
@@ -331,8 +331,8 @@ void routing_receive(int link, char *data, size_t size)
  * and generates own new routing information to broadcast it to the
  * neighbours if the update led to changes in the forward decision.
  * Returns whether the update led to changes in the forward decision.
- * @param link Link that received the incomming distance information.
- * @param inDistInfo Incomming distance information.
+ * @param link Link that received the incoming distance information.
+ * @param inDistInfo Incoming distance information.
  * @param outDistInfo Outgoing distance information.
  */
 bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo)
@@ -381,7 +381,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 }
 
 /**
- * Calculates costs for transmiting data over given link.
+ * Calculates costs for transmitting data over given link.
  * 
  * @param link Link.
  */
@@ -408,7 +408,7 @@ ROUTING_ENTRY *routing_lookup(CnetAddr addr)
  */
 void routing_init()
 {
-	/* initialise data structures */
+	/* initialize data structures */
 	int num_neighbours = link_num_links();
 	neighbours = malloc(sizeof(*neighbours) * (num_neighbours + 1));
 	
