@@ -117,5 +117,5 @@ EVENT_HANDLER(reboot_node)
 	link_init();
 	network_init();
 	transport_init();
-	CNET_enable_application(ALLNODES);
+	//~ CNET_enable_application(ALLNODES);
 }

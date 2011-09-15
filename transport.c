@@ -12,7 +12,6 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
-#include <sys/time.h>
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
@@ -179,7 +178,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 CnetTime get_timeout(CONNECTION *con)
 {
 	//~ return TRANSPORT_TIMEOUT;
-	return con->estimatedRTT + 4 * con->deviation;
+	return con->estimatedRTT + 8 * con->deviation;
+	//~ return 4 * con->estimatedRTT;
 }
 
 /**
@@ -276,7 +276,7 @@ void transmit_segments(CnetAddr addr)
 		con->numSentSegments++;
 	}
 	//TODO flow/congestion control
-	if (vector_nitems(con->outSegments) < 10) {
+	if (vector_nitems(con->outSegments) < MAX_WINDOW_SIZE) {
 		CNET_enable_application(addr);
 	}
 }
@@ -327,7 +327,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 	}
 
 	//stop the application if list of outsegments exceeds threshold
-	if (vector_nitems(con->outSegments) > 20) {
+	if (vector_nitems(con->outSegments) > MAX_WINDOW_SIZE) {
 		CNET_disable_application(addr);
 	}
 

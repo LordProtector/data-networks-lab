@@ -1,22 +1,22 @@
 /**
  * link.c
- *  
+ *
  * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of the link layer.
- * 
+ *
  * A link must be initialized before usage by calling link_init().
- * 
+ *
  * The link layer has the possibility to send data over a desired link.Thereby
  * it splits data into several frames if neccessary.
- * 
+ *
  * The link layer uses a queue to buffer frames to reduces the amount of time
  * being idle between the transmission of two frames.
- * 
+ *
  * If a frame is reveived fully without errors it is handed over to the upper
  * layer. Corrupted frames are droped.
- * 
- * //TODO Error corection could be implemented here. 
+ *
+ * //TODO Error corection could be implemented here.
  */
 
 /* include headers */
@@ -229,7 +229,7 @@ void transmit_frame(int link)
   if (queue_nitems(linkData[link].queue)) {
     msg = queue_peek(linkData[link].queue, &length);
     int ph_status = CNET_write_physical(link, msg, &length);
-    if (ph_status == ER_TOOBUSY) {
+    if (ph_status != 0 && (cnet_errno == ER_NOTREADY || cnet_errno == ER_TOOBUSY)) {
       // If link is still busy wait another microsecond
       timeout = 1;
     } else {
@@ -356,7 +356,7 @@ void link_receive(int link, char *data, size_t size)
 /**
  * Returns the bandwidth for the given link.
  */
-int link_get_bandwidth(int link) 
+int link_get_bandwidth(int link)
 {
 	assert(link <= nodeinfo.nlinks);
 	return linkinfo[link].bandwidth;
@@ -365,7 +365,7 @@ int link_get_bandwidth(int link)
 /**
  * Returns the MTU for the given link.
  */
-int link_get_mtu(int link) 
+int link_get_mtu(int link)
 {
 	assert(link <= nodeinfo.nlinks);
 	return linkinfo[link].mtu;
