@@ -36,10 +36,6 @@
  */
 #define HOP_LIMIT 8
 
-void int2string(char* s, int i);
-void routing_init();
-void routing_receive(int link, char *data, size_t size);
-
 /**
  * An entry of the routing table
  */
@@ -47,6 +43,11 @@ typedef struct {
 	int weight;			// weight to reach destination
 	int minMTU;			// minimal MTU on path to destination
 } ROUTING_ENTRY;
+
+void int2string(char* s, int i);
+void routing_init();
+void routing_receive(int link, char *data, size_t size);
+ROUTING_ENTRY *routing_lookup(CnetAddr addr);
 
 /**
  * Stores which route a packet should travel for a given destination.
@@ -184,9 +185,19 @@ void network_init()
  */
 int network_lookup(CnetAddr addr)
 {
-	char key[5];
-	int2string(key, addr);
-	return *((int*) hashtable_find(forwarding_table, key, NULL));
+	ROUTING_ENTRY *entry = routing_lookup(addr);
+	assert(entry != NULL);
+	int bestChoice = 0, bestWeight = INT_MAX;
+
+	for(int i = 1; i <= link_num_links(); i++) {
+		if(entry[i].weight < bestWeight) {
+			bestChoice = i;
+			bestWeight = entry[i].weight;
+		}
+	}
+	assert(bestWeight != INT_MAX);
+
+	return bestChoice;
 }
 
 /**
@@ -205,7 +216,7 @@ CnetAddr network_get_address()
 /**
  * Timeout in usec when a routing segment needs to be resend.
  */
-#define ROUTING_TIMEOUT 1000000
+#define ROUTING_TIMEOUT 100000
 
 
 typedef struct
@@ -230,7 +241,6 @@ typedef struct
 NEIGHBOUR *neighbours;
 
 bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo);
-ROUTING_ENTRY *routing_lookup(CnetAddr addr);
 int get_weight(int link);
 
 /**
@@ -369,9 +379,10 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	}
 	else {
 		for(int i = 1; i <= link_num_links(); i++) {
-			if(entry[i].weight < bestWeight)
+			if(entry[i].weight < bestWeight) {
 				bestChoice = i;
 				bestWeight = entry[i].weight;
+			}
 		}
 	}
 
@@ -390,18 +401,13 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	}
 
 	/* enable message delivery to that node */
-	//~ CNET_enable_application(inDistInfo.destAddr);
+	CNET_enable_application(inDistInfo.destAddr);
 
-	if (bestChoiceChanged) {
-		printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
-		for(int i = 1; i <= link_num_links(); i++) {
-			printf("%d ", entry[i].weight);
-		}
-		puts("");puts("");
-	} else {
-		printf("No change to routing table on node %d\n\n", nodeinfo.address);
-		puts("");puts("");
+	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
+	for(int i = 1; i <= link_num_links(); i++) {
+		printf("%d ", entry[i].weight);
 	}
+	puts("");puts("");
 
 	return bestChoiceChanged;
 }
