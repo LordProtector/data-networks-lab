@@ -300,6 +300,22 @@ void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 }
 
 /**
+ * Acknowledges received distance info
+ *
+ * @param link Link to send the acknowledgement on.
+ */
+void transmit_distance_ack(int link)
+{
+	NEIGHBOUR *nb = &neighbours[link];
+
+	ROUTING_SEGMENT rSeg;
+	rSeg.header.seq_num = 0;
+	rSeg.header.ack_num = nb->nextAckNum;
+
+	transmit_datagram(link, true, 0, (char *)&rSeg, sizeof(routing_header));
+}
+
+/**
  * Receive a routing segment.
  *
  * Reads the routing information from the routing segment,
@@ -327,27 +343,30 @@ void routing_receive(int link, char *data, size_t size)
 		free(ackSeg);
 	}
 
-	/* ignore out of order routing segment */
-	if(nb->nextAckNum != rSeg->header.seq_num) {
-		return;
-	}
-
-	nb->nextAckNum++;
-	/* process routing information */
 	int distInfoLength = (size - sizeof(routing_header)) / sizeof(DISTANCE_INFO);
-	DISTANCE_INFO sendDistInfo[distInfoLength];
-	int updates = 0;
-	for(int i=0; i<distInfoLength; i++) {
-		DISTANCE_INFO distInfo = rSeg->distance_info[i];
-		if(distInfo.destAddr != nodeinfo.address
-			&& update_routing_table(link, distInfo, &(sendDistInfo[updates]))) {
-			updates++;
-		}
-	}
 
-	/* broadcast distance updates */
-	if(updates > 0) {
-		broadcast_distance_info(sendDistInfo, updates * sizeof(DISTANCE_INFO));
+	if(nb->nextAckNum == rSeg->header.seq_num) { // in order
+		/* process routing information */
+		int updates = 0;
+		DISTANCE_INFO sendDistInfo[distInfoLength];
+		nb->nextAckNum++;
+
+		for(int i=0; i<distInfoLength; i++) {
+			DISTANCE_INFO distInfo = rSeg->distance_info[i];
+			if(distInfo.destAddr != nodeinfo.address
+				&& update_routing_table(link, distInfo, &(sendDistInfo[updates]))) {
+				updates++;
+			}
+		}
+
+		/* broadcast distance updates */
+		if(updates > 0) {
+			broadcast_distance_info(sendDistInfo, updates * sizeof(DISTANCE_INFO));
+		} else {
+			transmit_distance_ack(link);
+		}
+	} else if (distInfoLength != 0) { // out of order, no ack
+		transmit_distance_ack(link);
 	}
 }
 
