@@ -29,7 +29,7 @@
 /**
  * Maximal number of segments in storage and under transmission.
  */
-#define MAX_WINDOW_SIZE 30
+#define MAX_WINDOW_SIZE 10
 
 /**
  * Maximal offset of the window in byte.
@@ -164,12 +164,12 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 	double x = 0.125;
 	double y = 0.25;
 
-	printf("update_rtt(sampleRTT: %lld)\n", sampleRTT);
-	printf("old estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	//~ printf("update_rtt(sampleRTT: %lld)\n", sampleRTT);
+	//~ printf("old estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
 
 	con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
 	con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
-	printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	//~ printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
 }
 
 /**
@@ -359,7 +359,9 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart);
 
 	/* ignore duplicated segments */
-	if (!acknowledged(header.offset + payloadSize, ackOffset)) {
+	if (!acknowledged(header.offset + payloadSize, ackOffset) &&
+			!buffer_check(con->inBuf, header.offset))
+	{
 		/* accumulate segments in buffer */
 		buffer_store(con->inBuf, header.offset, payload, payloadSize);
 

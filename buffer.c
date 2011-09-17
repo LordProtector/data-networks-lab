@@ -132,7 +132,7 @@ void buffer_validate(BUFFER b, size_t pos)
 	uint8_t mask = 1 << (pos % 8);
 
 	//TODO what about receiving duplicated data
-	//~ assert(!(buf->bitmap[byte] & mask)); //do not overwrite valid data
+	assert(!(buf->bitmap[byte] & mask)); //do not overwrite valid data
 	buf->bitmap[byte] |= mask;
 }
 
@@ -167,9 +167,8 @@ void buffer_invalidate(BUFFER b, size_t pos)
 	size_t byte  = pos / 8;
 	uint8_t mask = 1 << (pos % 8);
 
-	if (buf->bitmap[byte] | mask) {
-		buf->bitmap[byte] ^= mask;
-	}
+	assert(buf->bitmap[byte] & mask);
+	buf->bitmap[byte] ^= mask;
 }
 
 /**
