@@ -16,7 +16,14 @@ The goal of this project is to transfer textfiles as sequence of characters thro
 
 \section{Layering and Protocol Design}
 
-Beside the two layers, physical and application layer, cnet provides we implement three additional layers between them. We call them \emph{link layer}, \emph{network layer}, and \emph{transport layer}, from bottom to top. Data packets in the link layer are called \emph{frame}, in the network layer \emph{datagram} and in the transport layer \emph{segment}. To data packets from the application layer we refer to as \emph{messages}.
+Beside the two layers, physical and application layer, cnet provides we implement three additional layers between them. We call them \emph{link layer}, \emph{network layer}, and \emph{transport layer}, from bottom to top. Data packets in the link layer are called \emph{frame}, in the network layer \emph{datagram} and in the transport layer \emph{segment}. To data packets from the application layer we refer to as \emph{messages}. Figure~\ref{fig:overview-layers} gives an overview how the different layers call each other.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.9\textwidth]{images/flowgraph_overview.pdf}
+  \caption[Overview Layers]{\hcaption{Overview Layers.} Overview of the call hierarchy of the different layers.}
+  \label{fig:overview-layers}
+\end{figure}
 
 
 \subsection{Link Layer}
