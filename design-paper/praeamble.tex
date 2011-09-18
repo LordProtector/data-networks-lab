@@ -22,6 +22,8 @@ urlcolor=blue,%blue
 citecolor=blue,%blue
 colorlinks=true}
 
+\usepackage[hang, raggedright, SF, sf]{subfigure}
+
 \usepackage[none]{hyphenat}
 \sloppy
 
@@ -38,6 +40,15 @@ colorlinks=true}
 \newcommand{\hcaption}[1]{\textbf{#1}}
 \usepackage[]{caption}
 \captionsetup{labelfont=bf,font={sf,footnotesize},format=plain}
+
+%-------------------------------------------------------------------------------
+% modify listings (for including e.g. source code) and add inline code command
+\usepackage{listings} 
+\renewcommand{\ttdefault}{pcr}
+\lstset{%
+        basicstyle=\ttfamily\scriptsize,
+}
+\newcommand{\code}[1]{{\ttfamily{#1}}}
 
 %lecture name
 \newcommand{\lecture}{
