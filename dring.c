@@ -30,6 +30,7 @@ typedef struct _DRING
 	SQUEUE s; // queue with the "smaller" elements
 	SQUEUE l; // queue with the "larger" elements
 	int windowSize; // size of the window
+	int maxFirstRing; // greatest element in s
 } _DRING;
 
 
@@ -45,6 +46,7 @@ DRING dring_new(int windowSize)
 	dring->s = squeue_new();
 	dring->l = squeue_new();
 	dring->windowSize = windowSize;
+	dring->maxFirstRing = -1;
 	return (DRING)dring;
 }
 
@@ -74,10 +76,11 @@ void dring_insert(DRING d, int data)
 {
 	_DRING *dring = (_DRING *)d;
 
-	assert(data < dring->windowSize*2);
-	int maxFirstRing = squeue_peek_tail(dring->s);
-	if(maxFirstRing == -1 || abs(data - maxFirstRing) < dring->windowSize) {
+	//~ assert(data < dring->windowSize*2);
+	if(dring->maxFirstRing == -1 || data > dring->maxFirstRing ||
+		 abs(data - dring->maxFirstRing) < dring->windowSize) {
 		squeue_insert(dring->s, data);
+		dring->maxFirstRing = squeue_peek_tail(dring->s);
 	}
 	else {
 		squeue_insert(dring->l, data);
@@ -97,7 +100,9 @@ int dring_peek(DRING d)
 	if(squeue_nitems(dring->s) > 0) {
 		return squeue_peek(dring->s);
 	}
-	else {
+	else if (squeue_nitems(dring->l)) {
+		return squeue_peek(dring->l);
+	}	else {
 		/* dring empty */
 		assert(squeue_nitems(dring->l) == 0);
 		return -1;
@@ -115,17 +120,17 @@ int dring_pop(DRING d)
 	_DRING *dring = (_DRING *)d;
 
 	if(squeue_nitems(dring->s) > 0) {
-		int ret = squeue_pop(dring->s);
-		
-		if(squeue_nitems(dring->s) == 0) {
-			/* dring has become empty -> switch rings */
-			SQUEUE *tmp = dring->l;
-			dring->l = dring->s;
-			dring->s = tmp;
-		}
-		return ret;
+		return squeue_pop(dring->s);
 	}
-	else {
+	else if (squeue_nitems(dring->l)) {
+		/* dring has become empty -> switch rings */
+		SQUEUE *tmp = dring->l;
+		dring->l = dring->s;
+		dring->s = tmp;
+		dring->maxFirstRing = squeue_peek_tail(dring->s);
+
+		return squeue_pop(dring->s);
+	} else {
 		/* dring empty */
 		assert(squeue_nitems(dring->l) == 0);
 		return -1;

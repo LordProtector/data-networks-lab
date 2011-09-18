@@ -16,7 +16,7 @@ The goal of this project is to transfer textfiles as sequence of characters thro
 
 \section{Layering and Protocol Design}
 
-Beside the two layers, physical and application layer, cnet provides we implement three additional layers between them. We call them \emph{link layer}, \emph{network layer}, and \emph{transport layer}, from bottom to top. Data in the link layer are called \emph{frame}, in the network layer \emph{datagram}, in the transport layer \emph{segment}, and data from the application layer are called \emph{messages}.
+Beside the two layers, physical and application layer, cnet provides we implement three additional layers between them. We call them \emph{link layer}, \emph{network layer}, and \emph{transport layer}, from bottom to top. Data packets in the link layer are called \emph{frame}, in the network layer \emph{datagram} and in the transport layer \emph{segment}. To data packets from the application layer we refer to as \emph{messages}.
 
 
 \subsection{Link Layer}
@@ -31,10 +31,10 @@ The link layer provides basic "point2point" connections between neighboring node
 
 \subsection{Network Layer}
 \ifthenelse{\boolean{m2}}{ %text for milestone 2
-  In the second milestone the network layer has no function. It only hands the data from the upper layer to the lower one and vice versa. It will get the function of maintaining and building a routing / forwarding table as well as rout datagrams through the network.
+  In the second milestone the network layer has no function. It only hands the data from the upper layer to the lower one and vice versa. It will get the function of maintaining and building a routing / forwarding table as well as route datagrams through the network.
 
 }{%test for milestone 3
-  The network layer has two main tasks: build and maintain a routing / forwarding table as well as rout datagrams through the network. The building and maintaining of the routing table is done in a distributed fashion. Initially only the costs to the direct neighbors is known and all other costs are infinite. The minimal costs are broadcasted to the direct neighbors. If a node receives information of a lower cost path, it updates it forwarding table. If the minimal cost rout cost changes it broadcasts this again to its neighbors.
+  The network layer has two main tasks: build and maintain a routing / forwarding table as well as route datagrams through the network. The building and maintaining of the routing table is done in a distributed fashion. Initially only the costs to the direct neighbors is known and all other costs are infinite. The minimal costs are broadcasted to the direct neighbors. If a node receives information of a lower cost path, it updates it forwarding table. If the minimal route cost changes it broadcasts this again to its neighbors.
 
   The forwarding table is build from the routing table by choosing the neighbor with the minimal costs. If a datagram arrives at a node, the network layer decides if it is the final destination of the datagram or if the datagram needs to be forwarded on the basis of the forwarding table. On each hop a datagram takes, the hop counter is decreased to avoid that a datagram travels too long in the network.
 }

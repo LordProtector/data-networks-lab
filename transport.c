@@ -12,7 +12,6 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
-#include <sys/time.h>
 #include <cnet.h>
 #include <cnetsupport.h>
 #include "datatypes.h"
@@ -30,7 +29,7 @@
 /**
  * Maximal number of segments in storage and under transmission.
  */
-#define MAX_WINDOW_SIZE 30
+#define MAX_WINDOW_SIZE 10
 
 /**
  * Maximal offset of the window in byte.
@@ -68,7 +67,7 @@ typedef struct
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
 	size_t nextOffset;      // The next offset the connection is waiting for. Initially it is 0.
-	
+
 	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
 	CnetTime deviation;		// Safety margin for the variation in estimatedRTT.
 } CONNECTION;
@@ -80,7 +79,7 @@ typedef struct
  */
 typedef struct
 {
-	struct timeval sendTime;  // Time when the segment was send last.
+	CnetTime sendTime;  // Time when the segment was send last.
 	CnetTimerID timerId;      // The ID of the timer to count the timeout.
 	CnetAddr addr;            // The destination address of the segment.
 	size_t size;              // Size of the out segment
@@ -104,12 +103,12 @@ HASHTABLE connections;
  * Creates a new connection for the given address. A connection contains
  * a buffer for incoming data and data managing the buffered data (storage of
  * the sequence numbers).
- * 
+ *
  * It also stores data for sending. It queues segments which are not send, need
  * to be resend because the segments gets lost, or waiting for an acknowledgment.
- * 
+ *
  * Old connection data for a given address are overwritten.
- * 
+ *
  * @param addr The address to create a connection for.
  * @return The created connection.
  */
@@ -129,8 +128,8 @@ CONNECTION *create_connection(CnetAddr addr)
 
 	char key[5];
 	int2string(key, addr);
+	assert(!hashtable_find(connections, key, NULL));
 	hashtable_add(connections, key, &con, sizeof(con));
-	//TODO connection data are overwritten, but not deleted. Do we have a memory leak here?
 
 	CONNECTION *ret = hashtable_find(connections, key, NULL);
 
@@ -140,7 +139,7 @@ CONNECTION *create_connection(CnetAddr addr)
 /**
  * Checks whether offset is affected by ackOffset.
  * Returns true if offset has already been acknowledged.
- * 
+ *
  * @param offset Offset to test for.
  * @param ackOffset First invalid offset.
  * @return Returns true if offset has already been acknowledged.
@@ -164,13 +163,13 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 {
 	double x = 0.125;
 	double y = 0.25;
-	
-	printf("update_rtt(sampleRTT: %d)\n", sampleRTT);
-	printf("old estRTT: %d, old dev: %d, timeout: %d\n", con->estimatedRTT, con->deviation, get_timeout(con));
-	
+
+	//~ printf("update_rtt(sampleRTT: %lld)\n", sampleRTT);
+	//~ printf("old estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
+
 	con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
 	con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
-	printf("new estRTT: %d, new dev: %d, timeout: %d\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	//~ printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
 }
 
 /**
@@ -178,46 +177,16 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
  */
 CnetTime get_timeout(CONNECTION *con)
 {
-	//return TRANSPORT_TIMEOUT;
-	return con->estimatedRTT + 4 * con->deviation;
+	//~ return TRANSPORT_TIMEOUT;
+	return con->estimatedRTT + 8 * con->deviation;
+	//~ return 4 * con->estimatedRTT;
 }
 
 /**
- * Subtract the `struct timeval' values X and Y,
- * storing the result in RESULT.
- * Return 1 if the difference is negative, otherwise 0. 
- * 
- * Source: http://www.gnu.org/s/hello/manual/libc/Elapsed-Time.html
- */
-int timeval_subtract (result, x, y)
-  struct timeval *result, *x, *y;
-{
-	/* Perform the carry for the later subtraction by updating y. */
-	if (x->tv_usec < y->tv_usec) {
-	 int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
-	 y->tv_usec -= 1000000 * nsec;
-	 y->tv_sec += nsec;
-	}
-	if (x->tv_usec - y->tv_usec > 1000000) {
-	 int nsec = (x->tv_usec - y->tv_usec) / 1000000;
-	 y->tv_usec += 1000000 * nsec;
-	 y->tv_sec -= nsec;
-	}
-
-	/* Compute the time remaining to wait.
-	  tv_usec is certainly positive. */
-	result->tv_sec = x->tv_sec - y->tv_sec;
-	result->tv_usec = x->tv_usec - y->tv_usec;
-
-	/* Return 1 if result is negative. */
-	return x->tv_sec < y->tv_sec;
-}
-
-/**
- * 
+ *
  * Calculates the distance between startOffset and endOffset. This corresponds
  * to the length of the message.
- * 
+ *
  * @param startOffset End offset for the calculation.
  * @param endOffset End offset of the calculation.
  * @return Distance between start and end offset.
@@ -234,7 +203,7 @@ size_t distance(size_t startOffset, size_t endOffset)
 /**
  * Marshals segment for efficient transmission. Segment needs to be unmarshaled
  * before usage.
- * 
+ *
  * @param seg Marshaled segment.
  * @param header Header of the segment.
  * @param payload Payload of the segment.
@@ -254,7 +223,7 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
 
 /**
  * Unmarshals segment.
- * 
+ *
  * @param seg Segment to unmarshal.
  * @param header Unmarshaled header.
  * @param payload Unmarshald payload.
@@ -275,7 +244,7 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 
 /**
  * Hands segment to network layer and starts timer.
- * 
+ *
  * @param outSeg Segment to hand over to network layer.
  */
 void transmit_segment(OUT_SEGMENT *outSeg)
@@ -285,13 +254,13 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
-	gettimeofday(&outSeg->sendTime, NULL);
+	outSeg->sendTime = nodeinfo.time_in_usec;
 }
 
 /**
  * Transmits segments to address 'addr' if window is not saturated and segments
  * are available.
- * 
+ *
  * @param addr Address to transmit segments to.
  */
 void transmit_segments(CnetAddr addr)
@@ -307,19 +276,19 @@ void transmit_segments(CnetAddr addr)
 		con->numSentSegments++;
 	}
 	//TODO flow/congestion control
-	if (vector_nitems(con->outSegments) < 10) {
+	if (vector_nitems(con->outSegments) < MAX_WINDOW_SIZE) {
 		CNET_enable_application(addr);
 	}
 }
 
 /**
  * Transmits a message.
- * 
+ *
  * A new connection is created if it is the first to send to or receive from
  * 'addr'. If necessary the message is split into several parts (size is given
  * by SEGMENT_SIZE) which are added to the outgoing queue.
- * Finally it triggers the sending of segments. 
- * 
+ * Finally it triggers the sending of segments.
+ *
  * @param addr Address to send the message to.
  * @param data Data to send to address 'addr'
  * @param size Size of the message.
@@ -358,7 +327,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 	}
 
 	//stop the application if list of outsegments exceeds threshold
-	if (vector_nitems(con->outSegments) > 20) {
+	if (vector_nitems(con->outSegments) > MAX_WINDOW_SIZE) {
 		CNET_disable_application(addr);
 	}
 
@@ -367,22 +336,19 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 
 /**
  * Receive a message.
- * 
+ *
  * A new connection is created if it is the first to send to or receive from
  * 'addr'. Received data are stored in a buffer if they are not already acknowledged. If the buffer contains complete messages, they are forwarded to the application and deleted from the buffer.
- * 
- * 
- * Finally it triggers the sending of segments. 
- * 
+ *
+ *
+ * Finally it triggers the sending of segments.
+ *
  * @param addr Source address.
  * @param data Data to receive.
  * @param size Size of the data to receive.
  */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
-	struct timeval recvTime, diff;
-	gettimeofday(&recvTime, NULL);
-	
 	CONNECTION *con = get_connection(addr);
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -393,7 +359,9 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart);
 
 	/* ignore duplicated segments */
-	if (!acknowledged(header.offset + payloadSize, ackOffset)) {
+	if (!acknowledged(header.offset + payloadSize, ackOffset) &&
+			!buffer_check(con->inBuf, header.offset))
+	{
 		/* accumulate segments in buffer */
 		buffer_store(con->inBuf, header.offset, payload, payloadSize);
 
@@ -422,11 +390,10 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	if(vector_nitems(con->outSegments) > 0) {
 		size_t segmentSize;
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
-		
-		timeval_subtract(&diff, &recvTime, &outSeg->sendTime);
-		CnetTime sampleRTT = diff.tv_sec * 1000000 + diff.tv_usec;
+
+		CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
 		update_rtt(con, sampleRTT);
-		
+
 		SEGMENT *seg = outSeg->seg;
 		size_t endOffset = seg->header.offset + segmentSize - sizeof(seg->header);
 		endOffset %= MAX_SEGMENT_OFFSET;
@@ -453,7 +420,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 /**
  * Lookup address in the connections table.
  * If it does not exists a new entry is created.
- * 
+ *
  * @param addr The address to look up.
  * @return The corresponding CONNECTION from the connection table.
  */
@@ -466,7 +433,7 @@ CONNECTION* get_connection(CnetAddr addr)
 	if (con == NULL) {
 		con = create_connection(addr);
 	}
-	
+
 	return con;
 }
 

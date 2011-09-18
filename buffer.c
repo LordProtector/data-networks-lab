@@ -4,13 +4,13 @@
  * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of a  cyclic buffer.
- * 
+ *
  * Data are stored in a cyclic buffer using a char array for the data and a
  * bitmap which stores which of the data are currently valid. Data can be
  * stored given a starting position, the data and the length of the data and
  * also be loaded from the buffer.
  *
- * 
+ *
  */
 
 #include <stdlib.h>
@@ -167,9 +167,8 @@ void buffer_invalidate(BUFFER b, size_t pos)
 	size_t byte  = pos / 8;
 	uint8_t mask = 1 << (pos % 8);
 
-	if (buf->bitmap[byte] | mask) {
-		buf->bitmap[byte] ^= mask;
-	}
+	assert(buf->bitmap[byte] & mask);
+	buf->bitmap[byte] ^= mask;
 }
 
 /**
