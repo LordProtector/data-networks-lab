@@ -412,9 +412,9 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			endOffset  = seg->header.offset + segmentSize - sizeof(seg->header);
 			endOffset %= MAX_SEGMENT_OFFSET;
 		}
-	}
 
-	transmit_segments(addr);
+		transmit_segments(addr);
+	}
 }
 
 /**

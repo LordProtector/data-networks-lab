@@ -100,7 +100,7 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
  */
 void network_transmit(CnetAddr addr, char *data, size_t size)
 {
-	int link =  network_lookup(addr);
+	int link = network_lookup(addr);
 	transmit_datagram(link, false, addr, data, size);
 }
 
