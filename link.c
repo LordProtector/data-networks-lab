@@ -8,15 +8,15 @@
  * A link must be initialized before usage by calling link_init().
  *
  * The link layer has the possibility to send data over a desired link.Thereby
- * it splits data into several frames if neccessary.
+ * it splits data into several frames if necessary.
  *
  * The link layer uses a queue to buffer frames to reduces the amount of time
  * being idle between the transmission of two frames.
  *
- * If a frame is reveived fully without errors it is handed over to the upper
- * layer. Corrupted frames are droped.
+ * If a frame is received fully without errors it is handed over to the upper
+ * layer. Corrupted frames are dropped.
  *
- * //TODO Error corection could be implemented here.
+ * //TODO Error correction could be implemented here.
  */
 
 /* include headers */
@@ -257,7 +257,7 @@ void transmit_frame(int link)
 
 /**
  * Sends data over a link.
- * Splits data into several frames if neccessary.
+ * Splits data into several frames if necessary.
  *
  * @param data Pointer to the data to send.
  * @param size Size of the data.
@@ -300,7 +300,7 @@ void link_transmit(int link, char *data, size_t size)
 
 /**
  * Takes a received frame and prepares a datagram for upper layer from it.
- * Only valide data are transmitted to upper layer. Thus, corruption becomes
+ * Only valid data are transmitted to upper layer. Thus, corruption becomes
  * frame loss.
  *
  * @param data The received data.
@@ -342,7 +342,7 @@ void link_receive(int link, char *data, size_t size)
   assert(linkData[link].size + payloadSize <= BUFFER_SIZE);
   //store data in buffer for later usage
   memcpy(linkData[link].buffer + linkData[link].size, payload, payloadSize);
-  //for the next frame we expecte an incremented ordering number
+  //for the next frame we expect an incremented ordering number
   linkData[link].ordering = header.ordering + 1;
   linkData[link].size += payloadSize;
 
