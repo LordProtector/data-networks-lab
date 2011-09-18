@@ -126,7 +126,6 @@ void network_receive(int link, char *data, size_t size)
 	}
 	else if(nodeinfo.address == destaddr) {
 		/* datagram destination = this node -> hand to upper layer */
-		//TODO evaluate datagram->routing_flag
 		assert(!datagram->header.routing);
 		char* segment = datagram->payload;
 		size_t segmentSize = size - sizeof(datagram_header);
@@ -149,30 +148,6 @@ void network_receive(int link, char *data, size_t size)
 void network_init()
 {
 	forwarding_table = hashtable_new(0);
-
-  #define SB  134
-	#define HOM 96
-	#define SLS 182
-
-	/* static forwarding_table creation for saarnet_3 */
-	char key[5];
-	int* one = malloc(sizeof(one)); *one = 1;
-	int* two = malloc(sizeof(two)); *two = 2;
-
-	switch(nodeinfo.address) {
-	case SB:
-		int2string(key, HOM);	hashtable_add(forwarding_table, key, one, sizeof(int));
-		int2string(key, SLS);	hashtable_add(forwarding_table, key, two, sizeof(int));
-		break;
-	case HOM:
-		int2string(key, SB);	hashtable_add(forwarding_table, key, one, sizeof(int));
-    int2string(key, SLS);	hashtable_add(forwarding_table, key, one, sizeof(int));
-		break;
-	case SLS:
-		int2string(key, SB);	hashtable_add(forwarding_table, key, one, sizeof(int));
-    int2string(key, HOM);	hashtable_add(forwarding_table, key, one, sizeof(int));
-		break;
-	}
 
 	routing_init();
 }
@@ -293,7 +268,7 @@ void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
 void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 {
 	int num_neighbours = link_num_links();
-	//~ printf("%s broadcast %d\n", nodeinfo.nodename, num_neighbours);
+
 	for(int i=1; i<=num_neighbours; i++) {
 		transmit_distance_info(distance_info, size, i);
 	}
@@ -330,7 +305,7 @@ void routing_receive(int link, char *data, size_t size)
 {
 	ROUTING_SEGMENT *rSeg = (ROUTING_SEGMENT *)data;
 	NEIGHBOUR *nb = &neighbours[link];
-	
+
 	/* process acknowledgement */
 	for (OUT_ROUTING_SEGMENT *ackSeg = vector_peek(nb->outRoutingSegments, 0, NULL);
 			 vector_nitems(nb->outRoutingSegments)
@@ -433,7 +408,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 
 /**
  * Calculates costs for transmitting data over given link.
- * 
+ *
  * @param link Link.
  */
 int get_weight(int link)
@@ -468,7 +443,6 @@ void routing_init()
 	for(int i=0; i<=num_neighbours; i++) {
 		neighbours[i].nextSeqNum = 0;
 		neighbours[i].nextAckNum = 0;
-		//neighbours[i].inUnAckSeqNum = squeue_new();
 		neighbours[i].outRoutingSegments = vector_new();
 	}
 
