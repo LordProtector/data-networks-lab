@@ -6,9 +6,6 @@
 \fancyhead[R]{\begin{tabular}{r}\lecture \\ \assignment \end{tabular}}
 \fancyhead[L]{\authors}
 
-
-
-
 \maketitle
 
 \section{Introduction}
@@ -27,14 +24,16 @@ Beside the two layers, physical and application layer, cnet provides we implemen
 
 
 \subsection{Link Layer}
+
+The link layer provides basic "point2point" connections between neighboring nodes. It can handle the transmission of arbitrary large packets (limited by the buffer size, which is large enough to handle all messages in this scenario) independently of the MTU of the link because it has the ability of fra(g)mentation. This means that data from the upper layer is split into several frames, which fit to the MTU, and put together on the receiver side. Figure~\ref{fig:receiver-side-link-layer} illustrates the receiver side of the link layer.
+This mechanism is guarded by the fact that no reordering of frames on one link occur. This layer also guarantees that all datagrams which are handed to the upper layer are \emph{free of corruption}. Corrupt frames are recognized by computing a checksum and all frames with errors which are not repairable are dropped. \ifthenelse{\boolean{m2}}{For milestone 3 it is also possible to implement error correction in this layer.}{ \fixme{will we implement error handling}} Finally, the data in this layer are handed to the physical layer in a first come first serve fairness. 
+
 \begin{figure}
   \centering
   \includegraphics[width=0.9\textwidth]{images/flowgraph_link_layer_receiver.pdf}
   \caption[Receiver side of link layer]{\hcaption{Receiver side of link layer.} The flow graph shows how data on the receiver side of the link layer are handled.}
   \label{fig:receiver-side-link-layer}
 \end{figure}
-The link layer provides basic "point2point" connections between neighboring nodes. It can handle the transmission of arbitrary large packets (limited by the buffer size, which is large enough to handle all messages in this scenario) independently of the MTU of the link because it has the ability of fra(g)mentation. This means that data from the upper layer are split into several frames which fit to the MTU and put together on the receiver side. This mechanism is guarded by the fact that no reordering of frames on one link occur. This layer also guarantees that all datagram which are handed to the upper layer are \emph{free of corruption}. Corrupt frames are recognized by computing a checksum and all frames with errors which are not repairable are dropped. \ifthenelse{\boolean{m2}}{For milestone 3 it is also possible to implement error correction in this layer.}{ \fixme{will we implement error handling}} Finally, the data in this layer are handed to the physical layer in a first come first serve fairness. Figure~\ref{fig:receiver-side-link-layer} illustrates the receiver side of the link layer.
-
 
 \subsection{Network Layer}
 \ifthenelse{\boolean{m2}}{ %text for milestone 2
@@ -51,7 +50,7 @@ The link layer provides basic "point2point" connections between neighboring node
 
 \subsection{Transport Layer}
 \ifthenelse{\boolean{m2}}{% text for milestone 2
-  In the second milestone the transport layer has no function. It only hands the data from the upper layer to the lower one and vice versa. It will get the function to guarantee reliable data transfer, congestion and flow control, segment messages to decrease the number of resend messages in case of corruption. To improve throughput it will buffer reordered messages.
+  In the second milestone the transport layer has no function. It only hands the data from the upper layer to the lower one and vice versa. It will get the function to guarantee reliable data transfer, congestion and flow control and to segment messages to decrease the number of resend messages in case of corruption. To improve throughput it will buffer reordered messages.
 }{% text for milestone 3
   The main task of the transport layer is to provide reliable data transfer. This means that only corruption free messages are delivered in order to the application layer. To provide this service, the transport layer uses cumulative acknowledgments and sequence numbers in form of offsets. For each received or send message from a host a connection is created. This contains a buffer for incoming data, cyclic sequence numbers and information to detect if messages are received complete. A window is used to send multiple messages without waiting for each acknowledgment. To increase performance we use cumulative acknowledgments where the acknowledgment number is the next offset the connection is waiting for. To provide this in an efficient way we buffer a limited amount of reordered messages.
   
@@ -65,7 +64,7 @@ The link layer provides basic "point2point" connections between neighboring node
 \ifthenelse{\boolean{m2}}{% text for milestone 2
   Our analysis shows that throughput and latency stays constant after a short period of time and the number of send / received messages increases linearly as assumed. Figure~\ref{fig:analysis} shows the behavior of the \code{saarnet2.txt} network for a simulation period of 10 min. The fluctuations at the beginning are due to the not filled queues after initialization. With our implementation we reach a throughput from Homburg to Saarbrücken of 9.1 kB/s and 116.8 kB/s the other way around.
   
-  \begin{figure}
+  \begin{figure}[h]
    \centering
    \subfigure[Throughput]{
     \label{fig:peptide1}
