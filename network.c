@@ -329,7 +329,7 @@ void transmit_distance_ack(int link)
 void routing_receive(int link, char *data, size_t size)
 {
 	ROUTING_SEGMENT *rSeg = (ROUTING_SEGMENT *)data;
-	NEIGHBOUR nb = neighbours[link];
+	NEIGHBOUR *nb = &neighbours[link];
 	
 	/* process acknowledgement */
 	for (OUT_ROUTING_SEGMENT *ackSeg = vector_peek(nb->outRoutingSegments, 0, NULL);

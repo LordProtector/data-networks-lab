@@ -3,7 +3,7 @@
  *
  * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
- * Implementation of milstone 2 of the data networks lab 2011
+ * Implementation of milstone 3 of the data networks lab 2011
  */
 
 /* include headers */
