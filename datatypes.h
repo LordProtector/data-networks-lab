@@ -35,15 +35,15 @@ typedef struct
 
 typedef struct
 {
-  uint16_t offset;     // sequence number of segment
-  uint16_t ackOffset;  // sequence number last continuously received segment + 1
+  uint32_t offset;     // sequence number of segment
+  uint32_t ackOffset;  // sequence number last continuously received segment + 1
   bool     isLast;     // last segment of a message
 } segment_header;
 
 typedef struct
 {
-  uint16_t offset;     // sequence number of segment + isLast
-  uint16_t ackOffset;  // sequence number last continuously received segment + 1
+  uint32_t offset;     // sequence number of segment + isLast
+  uint32_t ackOffset;  // sequence number last continuously received segment + 1
 } marshaled_segment_header;
 
 typedef struct

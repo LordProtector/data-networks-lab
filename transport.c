@@ -44,7 +44,7 @@
 /**
  * Maximal offset of the segment in byte (UINT15).
  */
-#define MAX_SEGMENT_OFFSET (UINT16_MAX >> 1)
+#define MAX_SEGMENT_OFFSET (1 << 18)
 
 /**
  * Maximal offset of the segment in byte (UINT15).
@@ -84,6 +84,7 @@ typedef struct
 	CnetAddr addr;            // The destination address of the segment.
 	size_t size;              // Size of the out segment
 	SEGMENT *seg;             // Pointer to the data stored in the segment.
+	int timesSend;
 } OUT_SEGMENT;
 
 
@@ -213,7 +214,7 @@ size_t distance(size_t startOffset, size_t endOffset)
 size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size_t size)
 {
 	//encode isLast in offset
-	seg->header.offset    = header->offset | (header->isLast ? (1 << 15) : 0);
+	seg->header.offset    = header->offset | (header->isLast ? MAX_SEGMENT_OFFSET : 0);
 	seg->header.ackOffset = header->ackOffset;
 
 	memcpy(seg->payload, payload, size);
@@ -232,8 +233,8 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
 size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, size_t size)
 {
 	//decode isLast from offset
-	header->isLast    = seg->header.offset & (1 << 15);
-	header->offset    = seg->header.offset ^ (header->isLast ? (1 << 15) : 0);
+	header->isLast    = seg->header.offset & MAX_SEGMENT_OFFSET;
+	header->offset    = seg->header.offset ^ (header->isLast ? MAX_SEGMENT_OFFSET : 0);
 	header->ackOffset = seg->header.ackOffset;
 
 	size_t payloadSize = size - sizeof(seg->header);
@@ -250,7 +251,11 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 void transmit_segment(OUT_SEGMENT *outSeg)
 {
 	CONNECTION *con = get_connection(outSeg->addr);
-
+//~ bool isLast = outSeg->seg->header.offset & MAX_SEGMENT_OFFSET;
+//~ size_t offset = outSeg->seg->header.offset ^ (isLast ? MAX_SEGMENT_OFFSET : 0);
+//~ size_t ackOffset = outSeg->seg->header.ackOffset;
+//~ printf("transmit segment: dest: %d offset: %d ackOffset: %d times send: %d\n",outSeg->addr,offset,ackOffset, outSeg->timesSend);
+outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
@@ -321,6 +326,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		outSeg.addr = addr;
 		outSeg.seg = seg;
 		outSeg.size = segSize;
+		outSeg.timesSend = 0;
 
 		//add created segment to vector of sendable segments
 		vector_append(con->outSegments, &outSeg, sizeof(outSeg));
