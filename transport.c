@@ -29,7 +29,7 @@
 /**
  * Maximal number of segments in storage and under transmission.
  */
-#define MAX_WINDOW_SIZE 10
+#define MAX_WINDOW_SIZE 100
 
 /**
  * Maximal offset of the window in byte.
@@ -66,6 +66,7 @@ typedef struct
 	VECTOR outSegments;     // Sent and queued segments without a received ACK.
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
+	size_t threshold;
 	size_t nextOffset;      // The next offset the connection is waiting for. Initially it is 0.
 
 	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
@@ -122,7 +123,8 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.bufferStart = 0;
 	con.outSegments = vector_new();
 	con.numSentSegments = 0;
-	con.windowSize = MAX_WINDOW_SIZE;
+	con.windowSize = 16;
+	con.threshold = 64;
 	con.nextOffset = 0;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
@@ -168,8 +170,13 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 	//~ printf("update_rtt(sampleRTT: %lld)\n", sampleRTT);
 	//~ printf("old estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
 
-	con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
-	con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
+	if (con->estimatedRTT != TRANSPORT_TIMEOUT) {
+		con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
+		con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
+	} else {
+		con->estimatedRTT = sampleRTT;
+		con->deviation = 0;
+	}
 	//~ printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
 }
 
@@ -178,8 +185,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
  */
 CnetTime get_timeout(CONNECTION *con)
 {
-	//~ return TRANSPORT_TIMEOUT;
-	return con->estimatedRTT + 8 * con->deviation;
+	return TRANSPORT_TIMEOUT;
+	//~ return con->estimatedRTT + 8 * con->deviation;
 	//~ return 4 * con->estimatedRTT;
 }
 
@@ -255,7 +262,14 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 //~ size_t offset = outSeg->seg->header.offset ^ (isLast ? MAX_SEGMENT_OFFSET : 0);
 //~ size_t ackOffset = outSeg->seg->header.ackOffset;
 //~ printf("transmit segment: dest: %d offset: %d ackOffset: %d times send: %d\n",outSeg->addr,offset,ackOffset, outSeg->timesSend);
-outSeg->timesSend++;
+
+	/* Congestion control */
+	if (outSeg->timesSend > 1) {
+		con->threshold = con->windowSize / 2;
+		con->windowSize = 1;
+	}
+
+	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
@@ -397,15 +411,14 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		size_t segmentSize;
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 
-		CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
-		update_rtt(con, sampleRTT);
-
 		SEGMENT *seg = outSeg->seg;
 		size_t endOffset = seg->header.offset + segmentSize - sizeof(seg->header);
 		endOffset %= MAX_SEGMENT_OFFSET;
 
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
+			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
+			update_rtt(con, sampleRTT);
 			CNET_stop_timer(outSeg->timerId);
 			free(outSeg->seg);
 			free(outSeg);
@@ -417,6 +430,13 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			seg = outSeg->seg;
 			endOffset  = seg->header.offset + segmentSize - sizeof(seg->header);
 			endOffset %= MAX_SEGMENT_OFFSET;
+
+			/* Congestion control */
+			if (con->windowSize < con->threshold) { // slow start
+				con->windowSize *= 2;
+			} else if (con->windowSize < MAX_WINDOW_SIZE) { // congestion avoidance
+				con->windowSize++;
+			}
 		}
 
 		transmit_segments(addr);
