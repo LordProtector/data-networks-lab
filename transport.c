@@ -51,6 +51,8 @@
  */
 #define TRANSPORT_BUFFER_SIZE MAX_SEGMENT_OFFSET
 
+#define USE_GEARING true
+
 
 /**
  * Data structure for one connection.
@@ -123,8 +125,8 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.bufferStart = 0;
 	con.outSegments = vector_new();
 	con.numSentSegments = 0;
-	con.windowSize = 16;
-	con.threshold = 64;
+	con.windowSize = 2;
+	con.threshold = 16;
 	con.nextOffset = 0;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
@@ -264,16 +266,16 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 //~ printf("transmit segment: dest: %d offset: %d ackOffset: %d times send: %d\n",outSeg->addr,offset,ackOffset, outSeg->timesSend);
 
 	/* Congestion control */
-	if (outSeg->timesSend > 1) {
+	if (outSeg->timesSend > 1 && con->windowSize > 1) {
 		con->threshold = con->windowSize / 2;
 		con->windowSize = 1;
 	}
 
+//~ printf("window size : %d to node %d\n", con->windowSize, outSeg->addr);
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
-	outSeg->sendTime = nodeinfo.time_in_usec;
+	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, outSeg->timesSend * get_timeout(con), (CnetData) outSeg);
 }
 
 /**
@@ -285,14 +287,20 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 void transmit_segments(CnetAddr addr)
 {
 	CONNECTION *con = get_connection(addr);
+	int timeout = 1;
 
   //window not saturated and segments available
 	while (con->numSentSegments < con->windowSize &&
 				 con->numSentSegments < vector_nitems(con->outSegments)) {
-		size_t size;
-		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, &size);
-		transmit_segment(outSeg);
+		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, NULL);
+		if (USE_GEARING) {
+			outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
+		} else {
+			transmit_segment(outSeg);
+		}
 		con->numSentSegments++;
+		outSeg->sendTime = nodeinfo.time_in_usec;
+		timeout += 500;
 	}
 	//TODO flow/congestion control
 	if (vector_nitems(con->outSegments) < MAX_WINDOW_SIZE) {
@@ -419,7 +427,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
 			update_rtt(con, sampleRTT);
-			CNET_stop_timer(outSeg->timerId);
+			CHECK(CNET_stop_timer(outSeg->timerId));
 			free(outSeg->seg);
 			free(outSeg);
 			con->numSentSegments--;
