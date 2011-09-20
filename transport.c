@@ -188,8 +188,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 CnetTime get_timeout(CONNECTION *con)
 {
 	//~ return TRANSPORT_TIMEOUT;
-	return con->estimatedRTT + 8 * con->deviation;
-	//~ return 4 * con->estimatedRTT;
+	//~ return con->estimatedRTT + 8 * con->deviation;
+	return 4 * con->estimatedRTT;
 }
 
 /**
@@ -383,12 +383,13 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	segment_header header;
 	char *payload;
 
+	int numSentSegments = con->numSentSegments;
 	size_t payloadSize = unmarshal_segment(segment, &header, &payload, size);
 	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart);
 
 	/* ignore duplicated segments */
 	if (!acknowledged(header.offset + payloadSize, ackOffset) &&
-			!buffer_check(con->inBuf, header.offset))
+			!buffer_check(con->inBuf, header.offset) && payloadSize > 0)
 	{
 		/* accumulate segments in buffer */
 		buffer_store(con->inBuf, header.offset, payload, payloadSize);
@@ -446,8 +447,23 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 				con->windowSize++;
 			}
 		}
+		numSentSegments = con->numSentSegments;
 
 		transmit_segments(addr);
+	}
+
+	/* In case piggybacking ack is not possible, send it directly */
+	if (payloadSize != 0 && numSentSegments == con->numSentSegments) {
+		SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
+		segment_header header;
+
+		header.offset    = con->nextOffset - 1;
+		header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
+		header.isLast    = true;
+
+		size_t segSize = marshal_segment(seg, &header, data, 0);
+		network_transmit(addr, (char *)seg, segSize);
+		free(seg);
 	}
 }
 
