@@ -30,6 +30,12 @@
 #include "network.h"
 
 
+/**
+ * output data of the queue length
+ */
+#define SHOW_QUEUE_LENGTH false
+
+
 /* Constants */
 
 /**
@@ -287,6 +293,13 @@ void link_transmit(int link, char *data, size_t size)
 
     queue_add(linkData[link].queue, &frame, frameSize);
   }
+#if SHOW_QUEUE_LENGTH == true
+  printf("%d\t ", nodeinfo.time_in_usec);
+  for(int i = 0; i < link_num_links()+1; i++){
+	  printf("%d\t ", queue_nitems(linkData[i].queue));
+  }
+  printf("\n");
+#endif
 
   #ifdef MILESTONE_2
   if (queue_nitems(linkData[link].queue) >= QUEUE_MAX_MSGS) {

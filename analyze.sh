@@ -15,7 +15,7 @@ mkdir tmp
 #$1 = period of execution
 #$2 = topology file
 
-cnet -W -s -T -e $2 -f 1s $1 > tmp/out
+cnet -W -s -T -e $2 -f 1s $1 -o out-%n > tmp/out
 analyze/build/analyze tmp/out tmp/results
 gnuplot tmp/results.gnuplot
 xv tmp/results-messages.png &
