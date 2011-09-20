@@ -12,4 +12,4 @@ rm *.o
 #$1 = period of execution
 #$2 = topology file
 
-cnet -W -s -T -e $2 $1
+time cnet -W -s -T -e $2 $1 -f 10s
