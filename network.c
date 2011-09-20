@@ -229,7 +229,7 @@ int get_weight(int link);
 void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
 {
 	outSeg->rSeg->header.ack_num = neighbours[outSeg->link].nextAckNum;
-	printf("transmit_routing_segment seq_num: %d ack_num: %d\n\n", outSeg->rSeg->header.seq_num, outSeg->rSeg->header.ack_num);
+	//printf("transmit_routing_segment seq_num: %d ack_num: %d\n\n", outSeg->rSeg->header.seq_num, outSeg->rSeg->header.ack_num);
 	transmit_datagram(outSeg->link, true, 0, (char *)outSeg->rSeg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
 }
@@ -405,11 +405,11 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	/* enable message delivery to that node */
 	CNET_enable_application(inDistInfo.destAddr);
 
-	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
-	for(int i = 1; i <= link_num_links(); i++) {
-		printf("%d ", entry[i].weight);
-	}
-	puts("");puts("");
+// 	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
+// 	for(int i = 1; i <= link_num_links(); i++) {
+// 		printf("%d ", entry[i].weight);
+// 	}
+// 	puts("");puts("");
 
 	return bestChoiceChanged;
 }
