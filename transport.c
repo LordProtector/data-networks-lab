@@ -53,6 +53,8 @@
 
 #define USE_GEARING true
 
+#define LOGGING
+
 
 /**
  * Data structure for one connection.
@@ -170,7 +172,7 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 	double y = 0.25;
 
 	//~ printf("update_rtt(sampleRTT: %lld)\n", sampleRTT);
-	//~ printf("old estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	//~ printf("old_estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
 
 	if (con->estimatedRTT != TRANSPORT_TIMEOUT) {
 		con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
@@ -178,7 +180,9 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 	} else {
 		con->estimatedRTT = sampleRTT;
 	}
-	printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	#ifdef LOGGING
+		printf("%d: [update_rtt] sampleRTT: %lld new_estRTT: %lld new_dev: %lld timeout: %lld\n\n", nodeinfo.time_in_usec, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
+	#endif
 }
 
 /**
@@ -274,7 +278,10 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 		con->windowSize = 1;
 	}
 
-//~ printf("window size : %d to node %d\n", con->windowSize, outSeg->addr);
+	#ifdef LOGGING
+		printf("%d: [transmit_segment] treshold: %d window_size: %d to_node %d\n", nodeinfo.time_in_usec, con->threshold, con->windowSize, outSeg->addr);
+	#endif
+	
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
@@ -307,6 +314,9 @@ void transmit_segments(CnetAddr addr)
 	}
 	//TODO flow/congestion control
 	if (vector_nitems(con->outSegments) < MAX_WINDOW_SIZE) {
+		#ifdef LOGGING
+			printf("%d: [enable_application_window_unsaturated]\n", nodeinfo.time_in_usec);
+		#endif
 		CNET_enable_application(addr);
 	}
 }
@@ -359,6 +369,9 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 
 	//stop the application if list of outsegments exceeds threshold
 	if (vector_nitems(con->outSegments) > MAX_WINDOW_SIZE) {
+		#ifdef LOGGING
+			printf("%d: [disable_application_window_saturated]\n", nodeinfo.time_in_usec);
+		#endif
 		CNET_disable_application(addr);
 	}
 
@@ -463,6 +476,9 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		header.offset    = con->nextOffset - 1;
 		header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 		header.isLast    = true;
+		#ifdef LOGGING
+			printf("%d: [send_not_piggybacked_ack]\n", nodeinfo.time_in_usec);
+		#endif
 
 		size_t segSize = marshal_segment(seg, &header, data, 0);
 		network_transmit(addr, (char *)seg, segSize);
