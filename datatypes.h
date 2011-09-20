@@ -14,6 +14,7 @@
 #define LINK_TIMER EV_TIMER1
 #define TRANSPORT_TIMER EV_TIMER2
 #define ROUTING_TIMER EV_TIMER3
+#define GEARING_TIMER EV_TIMER4
 
 /**
  * Computes the smaller of two numbers
