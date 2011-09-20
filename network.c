@@ -48,6 +48,7 @@ void int2string(char* s, int i);
 void routing_init();
 void routing_receive(int link, char *data, size_t size);
 ROUTING_ENTRY *routing_lookup(CnetAddr addr);
+void update_forwarding_table(CnetAddr destAddr, int nextHop);
 
 /**
  * Stores which route a packet should travel for a given destination.
@@ -160,19 +161,23 @@ void network_init()
  */
 int network_lookup(CnetAddr addr)
 {
-	ROUTING_ENTRY *entry = routing_lookup(addr);
-	assert(entry != NULL);
-	int bestChoice = 0, bestWeight = INT_MAX;
-
-	for(int i = 1; i <= link_num_links(); i++) {
-		if(entry[i].weight < bestWeight) {
-			bestChoice = i;
-			bestWeight = entry[i].weight;
-		}
-	}
-	assert(bestWeight != INT_MAX);
-
-	return bestChoice;
+	//~ ROUTING_ENTRY *entry = routing_lookup(addr);
+	//~ assert(entry != NULL);
+	//~ int bestChoice = 0, bestWeight = INT_MAX;
+//~ 
+	//~ for(int i = 1; i <= link_num_links(); i++) {
+		//~ if(entry[i].weight < bestWeight) {
+			//~ bestChoice = i;
+			//~ bestWeight = entry[i].weight;
+		//~ }
+	//~ }
+	//~ assert(bestWeight != INT_MAX);
+//~ 
+	//~ return bestChoice;
+	
+	char key[5];
+	int2string(key, addr);
+	return *((int *) hashtable_find(forwarding_table, key, NULL));
 }
 
 /**
@@ -392,6 +397,9 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 		outDistInfo->destAddr = inDistInfo.destAddr;
 		outDistInfo->weight = entry[link].weight;
 		outDistInfo->minMTU = entry[link].minMTU;
+		
+		/* update forwarding table */
+		update_forwarding_table(inDistInfo.destAddr, bestChoice);
 	}
 
 	/* enable message delivery to that node */
@@ -407,14 +415,18 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 }
 
 /**
- * Calculates costs for transmitting data over given link.
- *
- * @param link Link.
+ * Updates an entry in the forwarding table
+ * @param destAddr destination address (key of entry to get changed)
+ * @param nextHop next hop in path to destination
  */
-int get_weight(int link)
+void update_forwarding_table(CnetAddr destAddr, int nextHop)
 {
-	return 10000000 * 1.0 / link_get_bandwidth(link);
+	char key[5];
+	int2string(key, destAddr);
+	hashtable_remove(forwarding_table, key, NULL);
+	hashtable_add(forwarding_table, key, &nextHop, sizeof(nextHop));
 }
+
 
 /**
  * Looks up an address in the routing table.
@@ -426,6 +438,19 @@ ROUTING_ENTRY *routing_lookup(CnetAddr addr)
 	int2string(key, addr);
 	return (ROUTING_ENTRY *) hashtable_find(routing_table, key, NULL);
 }
+
+
+/**
+ * Calculates costs for transmitting data over given link.
+ *
+ * @param link Link.
+ */
+int get_weight(int link)
+{
+	return 10000000 * 1.0 / link_get_bandwidth(link);
+}
+
+
 
 /**
  * Initializes the routing algorithm.
