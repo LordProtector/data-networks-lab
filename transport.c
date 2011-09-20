@@ -177,9 +177,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 		con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
 	} else {
 		con->estimatedRTT = sampleRTT;
-		con->deviation = 0;
 	}
-	//~ printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
+	printf("new estRTT: %lld, new dev: %lld, timeout: %lld\n\n", con->estimatedRTT, con->deviation, get_timeout(con));
 }
 
 /**
@@ -187,9 +186,13 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
  */
 CnetTime get_timeout(CONNECTION *con)
 {
-	//~ return TRANSPORT_TIMEOUT;
-	//~ return con->estimatedRTT + 8 * con->deviation;
-	return 4 * con->estimatedRTT;
+	//return TRANSPORT_TIMEOUT;
+	int timeout = con->estimatedRTT + 4 * con->deviation;;
+	if(timeout > 2 * TRANSPORT_TIMEOUT) {
+		timeout = 2 * TRANSPORT_TIMEOUT;
+	}
+	return timeout;
+	//return 4 * con->estimatedRTT;
 }
 
 /**
@@ -275,7 +278,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, outSeg->timesSend * get_timeout(con), (CnetData) outSeg);
+	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
 }
 
 /**

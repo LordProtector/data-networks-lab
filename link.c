@@ -33,7 +33,7 @@
 /**
  * output data of the queue length
  */
-#define SHOW_QUEUE_LENGTH true
+#define SHOW_QUEUE_LENGTH false
 
 
 /* Constants */
