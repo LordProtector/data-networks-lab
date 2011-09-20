@@ -188,8 +188,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 CnetTime get_timeout(CONNECTION *con)
 {
 	//~ return TRANSPORT_TIMEOUT;
-	//~ return con->estimatedRTT + 16 * con->deviation;
-	return 4 * con->estimatedRTT;
+	return con->estimatedRTT + 8 * con->deviation;
+	//~ return 4 * con->estimatedRTT;
 }
 
 /**
