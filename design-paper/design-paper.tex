@@ -24,9 +24,13 @@ Beside the two layers, physical and application layer, cnet provides we implemen
 
 
 \subsection{Link Layer}
+  The link layer provides basic "point2point" connections between neighboring nodes. 
 
-The link layer provides basic "point2point" connections between neighboring nodes. It can handle the transmission of arbitrary large packets (limited by the buffer size, which is large enough to handle all messages in this scenario) independently of the MTU of the link because it has the ability of fra(g)mentation. This means that data from the upper layer is split into several frames, which fit to the MTU, and put together on the receiver side. Figure~\ref{fig:receiver-side-link-layer} illustrates the receiver side of the link layer. The ordering of the frames is checked by sequence numbers and identification numbers (ID). We use an additional \emph{isLast} flag to identify when a datagram ends.
-This mechanism is guarded by the fact that no reordering of frames on one link occur. This layer also guarantees that all datagrams which are handed to the upper layer are \emph{free of corruption}. Corrupt frames are recognized by computing a checksum and all frames with errors are dropped. \ifthenelse{\boolean{m2}}{For milestone 3 it is also possible to implement error correction in this layer.}{We dropped the idea of implementing error correction due to the low rate of corruption.} Finally, the data in this layer are handed to the physical layer in a first come first serve fairness. 
+  \subsubsection{Framementation}
+  It can handle the transmission of arbitrary large packets (limited by the buffer size, which is large enough to handle all messages in this scenario) independently of the MTU of the link because it has the ability of fra(g)mentation. This means that data from the upper layer is split into several frames, which fit to the MTU, and put together on the receiver side. Figure~\ref{fig:receiver-side-link-layer} illustrates the receiver side of the link layer. The ordering of the frames is checked by sequence numbers and identification numbers (ID). We use an additional \emph{isLast} flag to identify when a datagram ends. This mechanism is guarded by the fact that no reordering of frames on one link occur. 
+
+  \subsubsection{Corruption Detection}
+  This layer also guarantees that all datagrams which are handed to the upper layer are \emph{free of corruption}. Corrupt frames are recognized by computing a checksum and all frames with errors are dropped. \ifthenelse{\boolean{m2}}{For milestone 3 it is also possible to implement error correction in this layer.}{We dropped the idea of implementing error correction due to the low rate of corruption.} Finally, the data in this layer are handed to the physical layer in a first come first serve fairness. 
 
 \begin{figure}
   \centering
@@ -40,9 +44,21 @@ This mechanism is guarded by the fact that no reordering of frames on one link o
   In the second milestone the network layer has no function. It only hands the data from the upper layer to the lower one and vice versa. It will get the function of maintaining and building a routing / forwarding table as well as route datagrams through the network.
 
 }{%test for milestone 3
-  The network layer has two main tasks: build and maintain a routing / forwarding table as well as route datagrams through the network. The building and maintaining of the routing table is done in a distributed fashion using the \emph{distance vector algorithm}. Initially only the costs to the direct neighbors are known and all other costs are infinite. The minimal costs are broadcasted to the direct neighbors. If a node receives information of a lower cost path, it updates its forwarding table. If the minimal route cost changes it broadcasts this again to its neighbors. These data are send in a reliable fashion using acknowledgments. This ensures that the algorithm terminates with low cost routs for every node.
+  The network layer has two main tasks: build and maintain a routing / forwarding table as well as route datagrams through the network. 
 
-  The forwarding table is build from the routing table by choosing the neighbor with the minimal costs. If a datagram arrives at a node, the network layer decides if it is the final destination of the datagram or if the datagram needs to be forwarded on the basis of the forwarding table. On each hop a datagram takes, the hop counter is decreased to avoid that a datagram travels too long in the network.
+  \subsubsection{Routing}
+  The building and maintaining of the routing table is done in a distributed fashion using the \emph{distance vector algorithm}. Initially, the only information each node has, is, that it can reach itself with cost zero, all other costs are infinity. This corresponds to have routing information for all paths of length zero. Starting from that initial knowledge we will iteratively gaining routing information for paths with increasing lengths.
+
+  Whenever a node $i$ receives the routing information that one of his neighbors $j$ can route to an specific destination host $z$ over a path of length $n$ with costs $c$, it concludes that itself could reach that host $z$ over a path of length $n+1$ with costs $c+c(i,j)$ using $j$ as the first hop. Note that $c(i,j)$ is $i$'s cost to reach $j$. The routing table contains information about the costs to reach any node using any of the direct neighbors as next hop. If a routing table update results in a change of the path with the lowest costs, a node broadcasts its new cost to route over that path to all direct neighbors. Thus the routes with minimal costs are propagated through the network.
+
+  As cost or weight function $c(i,j)$ we use the reciprocal of the link bandwidth between node $i$ and node $j$.
+
+  Please notice, that routing information are send in a reliable fashion (using acknowledgments). This ensures that the algorithm terminates with low cost routes for every node.
+
+  Furthermore, a forwarding table is build from the routing table by choosing the neighbor with the minimal costs as the next hop. The forwarding table is kept up to date during the run of the routing algorithm.
+
+  \subsubsection{Forwarding}
+  If a datagram arrives at a node, the network layer checks whether this node is indeed the final destination of the datagram. If so the datagram header gets removed and the payload is handed to the transport layer. Otherwise, the datagram is forwarded to the next hop of the path with the minimal costs, according to the forwarding table. On each hop a datagram passes, the hop counter is decreased to avoid that a datagram travels too long in the network.
 }
 
 
@@ -52,10 +68,21 @@ This mechanism is guarded by the fact that no reordering of frames on one link o
 \ifthenelse{\boolean{m2}}{% text for milestone 2
   In the second milestone the transport layer has no function. It only hands the data from the upper layer to the lower one and vice versa. It will get the function to guarantee reliable data transfer, congestion and flow control and to segment messages to decrease the number of resend messages in case of corruption. To improve throughput it will buffer reordered messages.
 }{% text for milestone 3
-  The main task of the transport layer is to provide reliable data transfer and congestion control. Reliable data transfer means that only corruption free messages are delivered in order to the application layer. To provide this service, the transport layer uses cumulative acknowledgments, sequence numbers in form of offsets and an isLast flag to identify the end of a message. For each received or send message from a host a connection is created. This contains a buffer for incoming data, cyclic sequence numbers and information to detect if messages are received complete. A window is used to send multiple messages without waiting for each acknowledgment. To increase performance we use cumulative acknowledgments where the acknowledgment number is the next offset the connection is waiting for. To provide this in an efficient way we buffer a limited amount of reordered messages.
+  The main task of the transport layer is to provide reliable data transfer and congestion control.
+
+  \subsubsection{Reliable Data Transfer}
+  Reliable data transfer means that all messages send on the network will be correctly delivered in order to the application layer of the receiver. To provide this service, the transport layer uses cumulative acknowledgements, sequence numbers in form of offsets and an isLast flag to identify the end of a message. The Transport Layer has the notion of a connection for all communication partners, i.e. in Cnet that means all other nodes in the system.
   
+  In and out going data is buffered per connection. A window is used to send multiple messages without waiting for each acknowledgement, like a stop-and-wait protocol would do. To increase performance we use cumulative acknowledgements where the acknowledgement number is the next offset the connection is waiting for. To provide this in an efficient way, we buffer a limited amount of reordered segments, .
+
+  cyclic seq nums (double window size)
+  detect correct order!
+  EstimatedRTT!!!
+  
+  \subsubsection{Congestion Control}
   Additionally this layer provides congestion control using the Tahoe algorithm explained in the lecture using a slow start and congestion avoidance phase with additive increase and multiplicative decrease.
   
+  \subsubsection{Segmentation}
   Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames are reached previously without errors. If the segments are smaller, the traffic becomes lower.
 
 }
