@@ -168,7 +168,7 @@ void Analyze::writeGnuplut(const string& output)
 			}
 			string file = output + "_" + it->first + "-" + jt->first;
 			string title = "to " + it->first + " from " + jt->first;
-			fstr << "'" << file << "' using 1:2 with linespoints title '" << title << "'";
+			fstr << "'" << file << "' using 1:2 with lines title '" << title << "'";
 		}
 	}
 	fstr << endl;
@@ -195,7 +195,7 @@ void Analyze::writeGnuplut(const string& output)
 			}
 			string file = output + "_" + it->first + "-" + jt->first;
 			string title = "to " + it->first + " from " + jt->first;
-			fstr << "'" << file << "' using 1:3 with linespoints title '" << title << "'";
+			fstr << "'" << file << "' using 1:3 with lines title '" << title << "'";
 		}
 	}
 	fstr << endl;
@@ -222,7 +222,7 @@ void Analyze::writeGnuplut(const string& output)
 			}
 			string file = output + "_" + it->first + "-" + jt->first;
 			string title = "to " + it->first + " from " + jt->first;
-			fstr << "'" << file << "' using 1:4 with linespoints title '" << title << "'";
+			fstr << "'" << file << "' using 1:4 with lines title '" << title << "'";
 		}
 	}
 	fstr << endl;

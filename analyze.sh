@@ -21,3 +21,15 @@ gnuplot tmp/results.gnuplot
 xv tmp/results-messages.png &
 xv tmp/results-latency.png &
 xv tmp/results-throughput.png &
+
+grep -e queue out-SB > tmp/queuelength
+gnuplot queuelength.gnuplot
+xv tmp/queuelength.png &
+
+grep timeout out-SB | grep "to_node 96" > tmp/timeout
+gnuplot timeout.gnuplot
+xv tmp/timeout.png&
+
+grep window out-SB | grep "to_node: 96" > tmp/window
+gnuplot window.gnuplot
+xv tmp/window.png&

@@ -183,7 +183,7 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 		con->estimatedRTT = sampleRTT;
 	}
 	#if LOGGING == true
-		printf("%lld: [update_rtt] to_node %d sampleRTT: %d new_estRTT: %d new_dev: %d timeout: %d\n\n", nodeinfo.time_in_usec, con->addr, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
+		printf("%lld: [update_rtt] to_node: %d sampleRTT: %d new_estRTT: %d new_dev: %d timeout: %d\n\n", nodeinfo.time_in_usec, con->addr, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
 	#endif
 }
 
