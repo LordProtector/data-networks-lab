@@ -181,7 +181,7 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 		con->estimatedRTT = sampleRTT;
 	}
 	#if LOGGING == true
-		printf("%d: [update_rtt] sampleRTT: %lld new_estRTT: %lld new_dev: %lld timeout: %lld\n\n", nodeinfo.time_in_usec, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
+		printf("%lld: [update_rtt] at_node: %d sampleRTT: %lld new_estRTT: %lld new_dev: %lld timeout: %lld\n\n", nodeinfo.time_in_usec, nodeinfo.address, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
 	#endif
 }
 
@@ -279,7 +279,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	}
 
 	#if LOGGING == true
-		printf("%d: [transmit_segment] treshold: %d window_size: %d to_node %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->threshold, con->windowSize, outSeg->addr, vector_nitems(con->outSegments));
+		printf("%lld: [transmit_segment] at_node: %d treshold: %d window_size: %d to_node %d numOutSeg: %d\n", nodeinfo.time_in_usec, nodeinfo.address, con->threshold, con->windowSize, outSeg->addr, vector_nitems(con->outSegments));
 	#endif
 
 	outSeg->timesSend++;
@@ -289,7 +289,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 
 	if (vector_nitems(con->outSegments) < con->windowSize) {
 		#if LOGGING == true
-		printf("%d: [enable_application_window_unsaturated]\n", nodeinfo.time_in_usec);
+		printf("%lld: [enable_application_window_unsaturated] at_node: %d, enable_addr: %d\n", nodeinfo.time_in_usec, nodeinfo.address, outSeg->addr);
 		#endif
 		CNET_enable_application(outSeg->addr);
 	}
@@ -370,7 +370,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 	//stop the application if list of outsegments exceeds threshold
 	if (vector_nitems(con->outSegments) >= con->windowSize) {
 		#if LOGGING == true
-			printf("%d: [disable_application_window_saturated]\n", nodeinfo.time_in_usec);
+			printf("%lld: [disable_application_window_saturated] at_node: %d disable_addr\n", nodeinfo.time_in_usec, nodeinfo.address, addr);
 		#endif
 		CNET_disable_application(addr);
 	}
@@ -397,7 +397,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	CONNECTION *con = get_connection(addr);
 	
 	#if LOGGING == true
-	printf("%d: [receive_segment] from_node %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+	printf("%lld: [receive_segment] at_node: %d from_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, nodeinfo.address, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
 	#endif
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -472,7 +472,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 		if (vector_nitems(con->outSegments) < con->windowSize) {
 			#if LOGGING == true
-			printf("%d: [enable_application_window_unsaturated]\n", nodeinfo.time_in_usec);
+			printf("%lld: [enable_application_window_unsaturated] at_node: %d, enable_addr: %d\n", nodeinfo.time_in_usec, nodeinfo.address, addr);
 			#endif
 			CNET_enable_application(addr);
 		}
@@ -489,7 +489,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 		header.isLast    = true;
 		#if LOGGING == true
-			printf("%d: [send_not_piggybacked_ack]\n", nodeinfo.time_in_usec);
+			printf("%lld: [send_not_piggybacked_ack] at_node: %d to_node: %d\n", nodeinfo.time_in_usec, nodeinfo.address, addr);
 		#endif
 
 		size_t segSize = marshal_segment(seg, &header, data, 0);
