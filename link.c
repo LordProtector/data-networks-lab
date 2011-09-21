@@ -33,7 +33,7 @@
 /**
  * output data of the queue length
  */
-#define SHOW_QUEUE_LENGTH false
+#define SHOW_QUEUE_LENGTH true
 
 
 /* Constants */
@@ -256,8 +256,6 @@ void transmit_frame(int link)
     CNET_enable_application(ALLNODES);
   }
   #endif
-  
-  printf("%s's link %d queue size: %d\n", nodeinfo.nodename, link, link_get_queue_size(link));
 }
 
 
@@ -294,7 +292,7 @@ void link_transmit(int link, char *data, size_t size)
     queue_add(linkData[link].queue, &frame, frameSize);
   }
 #if SHOW_QUEUE_LENGTH == true
-  printf("%d\t ", nodeinfo.time_in_usec);
+  printf("%d: [queue_length]\t ", nodeinfo.time_in_usec);
   for(int i = 0; i < link_num_links()+1; i++){
 	  printf("%d\t ", queue_nitems(linkData[i].queue));
   }

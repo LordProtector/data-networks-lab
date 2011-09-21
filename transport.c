@@ -279,7 +279,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	}
 
 	#if LOGGING == true
-		printf("%d: [transmit_segment] treshold: %d window_size: %d to_node %d\n", nodeinfo.time_in_usec, con->threshold, con->windowSize, outSeg->addr);
+		printf("%d: [transmit_segment] treshold: %d window_size: %d to_node %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->threshold, con->windowSize, outSeg->addr, vector_nitems(con->outSegments));
 	#endif
 
 	outSeg->timesSend++;
@@ -393,7 +393,12 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
  */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
+	
 	CONNECTION *con = get_connection(addr);
+	
+	#if LOGGING == true
+	printf("%d: [receive_segment] from_node %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+	#endif
 
 	SEGMENT *segment = (SEGMENT *)data;
 	segment_header header;
