@@ -51,6 +51,11 @@
  */
 #define TRANSPORT_BUFFER_SIZE MAX_SEGMENT_OFFSET
 
+/**
+ * Minimum time before we send another ack
+ */
+#define ACK_TIME 1000
+
 #define USE_GEARING true
 
 #define LOGGING true
@@ -78,6 +83,7 @@ typedef struct
 	CnetAddr addr;          // Address of the connected node
 	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
 	CnetTime deviation;		  // Safety margin for the variation in estimatedRTT.
+	CnetTime lastSendAck;
 } CONNECTION;
 
 /**
@@ -136,6 +142,7 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.addr = addr;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
+	con.lastSendAck = 0;
 
 	char key[5];
 	int2string(key, addr);
@@ -285,7 +292,8 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /*outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
+	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /* outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
+	con->lastSendAck = nodeinfo.time_in_usec;
 
 	if (vector_nitems(con->outSegments) < con->windowSize) {
 		#if LOGGING == true
@@ -307,8 +315,7 @@ void transmit_segments(CnetAddr addr)
 	int timeout = 1;
 
   //window not saturated and segments available
-	while (con->numSentSegments < con->windowSize &&
-				 con->numSentSegments < vector_nitems(con->outSegments)) {
+	while (con->numSentSegments < vector_nitems(con->outSegments)) {
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, NULL);
 		if (USE_GEARING) {
 			outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
@@ -397,7 +404,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	CONNECTION *con = get_connection(addr);
 
 	#if LOGGING == true
-	printf("%lld: [receive_segment] from_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+	printf("%lld: [receive_segment] from_node: %d treshold: %d window_size: %d numOutSeg: %d numSentSegments: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
 	#endif
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -444,6 +451,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		SEGMENT *seg = outSeg->seg;
 		size_t endOffset = seg->header.offset + segmentSize - sizeof(seg->header);
 		endOffset %= MAX_SEGMENT_OFFSET;
+		assert(acknowledged(seg->header.offset - 1, header.ackOffset));
 
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
@@ -482,7 +490,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	#if EXPLICIT_ACK == true
 	/* In case piggybacking ack is not possible, send it directly */
-	if (payloadSize != 0 && numSentSegments == con->numSentSegments) {
+	if (payloadSize != 0 && numSentSegments == con->numSentSegments && nodeinfo.time_in_usec - con->lastSendAck > ACK_TIME) {
 		SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
 		segment_header header;
 
@@ -495,6 +503,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 		size_t segSize = marshal_segment(seg, &header, data, 0);
 		network_transmit(addr, (char *)seg, segSize);
+		con->lastSendAck = nodeinfo.time_in_usec;
 		free(seg);
 	}
 	#endif
