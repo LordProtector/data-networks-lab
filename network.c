@@ -447,7 +447,9 @@ ROUTING_ENTRY *routing_lookup(CnetAddr addr)
  */
 int get_weight(int link)
 {
-	return 10000000 * 1.0 / link_get_bandwidth(link);
+	//return 10000000 * 1.0 / link_get_bandwidth(link);
+	double base = (link_get_bandwidth(link)-5.);
+	return 1000000. *  (-0.04*(base * base * base)+6.);
 }
 
 
