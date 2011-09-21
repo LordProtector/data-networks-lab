@@ -26,7 +26,7 @@ grep -e queue out-SB > tmp/queuelength
 gnuplot queuelength.gnuplot
 xv tmp/queuelength.png &
 
-grep timeout out-SB | grep "to_node 96" > tmp/timeout
+grep timeout out-SB | grep "to_node: 96" > tmp/timeout
 gnuplot timeout.gnuplot
 xv tmp/timeout.png&
 
