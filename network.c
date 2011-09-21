@@ -34,7 +34,7 @@
 /**
  * Max number of hops a datagram is allowed to travel before it gets dropped.
  */
-#define HOP_LIMIT 8
+#define HOP_LIMIT 32
 
 /**
  * An entry of the routing table
@@ -164,7 +164,7 @@ int network_lookup(CnetAddr addr)
 	//~ ROUTING_ENTRY *entry = routing_lookup(addr);
 	//~ assert(entry != NULL);
 	//~ int bestChoice = 0, bestWeight = INT_MAX;
-//~ 
+//~
 	//~ for(int i = 1; i <= link_num_links(); i++) {
 		//~ if(entry[i].weight < bestWeight) {
 			//~ bestChoice = i;
@@ -172,9 +172,9 @@ int network_lookup(CnetAddr addr)
 		//~ }
 	//~ }
 	//~ assert(bestWeight != INT_MAX);
-//~ 
+//~
 	//~ return bestChoice;
-	
+
 	char key[5];
 	int2string(key, addr);
 	return *((int *) hashtable_find(forwarding_table, key, NULL));
@@ -397,7 +397,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 		outDistInfo->destAddr = inDistInfo.destAddr;
 		outDistInfo->weight = entry[link].weight;
 		outDistInfo->minMTU = entry[link].minMTU;
-		
+
 		/* update forwarding table */
 		update_forwarding_table(inDistInfo.destAddr, bestChoice);
 	}

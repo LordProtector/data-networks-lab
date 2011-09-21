@@ -281,12 +281,12 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	#if LOGGING == true
 		printf("%d: [transmit_segment] treshold: %d window_size: %d to_node %d\n", nodeinfo.time_in_usec, con->threshold, con->windowSize, outSeg->addr);
 	#endif
-	
+
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
-	
+
 	if (vector_nitems(con->outSegments) < con->windowSize) {
 		#if LOGGING == true
 		printf("%d: [enable_application_window_unsaturated]\n", nodeinfo.time_in_usec);
@@ -318,7 +318,7 @@ void transmit_segments(CnetAddr addr)
 		con->numSentSegments++;
 		outSeg->sendTime = nodeinfo.time_in_usec;
 		timeout += 500;
-	}	
+	}
 }
 
 /**
@@ -368,7 +368,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 	}
 
 	//stop the application if list of outsegments exceeds threshold
-	if (vector_nitems(con->outSegments) > con->windowSize) {
+	if (vector_nitems(con->outSegments) >= con->windowSize) {
 		#if LOGGING == true
 			printf("%d: [disable_application_window_saturated]\n", nodeinfo.time_in_usec);
 		#endif
@@ -464,6 +464,13 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			}
 		}
 		numSentSegments = con->numSentSegments;
+
+		if (vector_nitems(con->outSegments) < con->windowSize) {
+			#if LOGGING == true
+			printf("%d: [enable_application_window_unsaturated]\n", nodeinfo.time_in_usec);
+			#endif
+			CNET_enable_application(addr);
+		}
 
 		transmit_segments(addr);
 	}
