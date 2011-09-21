@@ -279,6 +279,10 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
+	
+	if (vector_nitems(con->outSegments) < con->windowSize) {
+		CNET_enable_application(addr);
+	}
 }
 
 /**
@@ -304,11 +308,7 @@ void transmit_segments(CnetAddr addr)
 		con->numSentSegments++;
 		outSeg->sendTime = nodeinfo.time_in_usec;
 		timeout += 500;
-	}
-	//TODO flow/congestion control
-	if (vector_nitems(con->outSegments) < MAX_WINDOW_SIZE) {
-		CNET_enable_application(addr);
-	}
+	}	
 }
 
 /**
@@ -358,7 +358,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 	}
 
 	//stop the application if list of outsegments exceeds threshold
-	if (vector_nitems(con->outSegments) > MAX_WINDOW_SIZE) {
+	if (vector_nitems(con->outSegments) > con->windowSize) {
 		CNET_disable_application(addr);
 	}
 
