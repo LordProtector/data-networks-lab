@@ -24,11 +24,13 @@
 /**
  * Size of a segment in byte.
  */
+//8182 also a good value
 #define SEGMENT_SIZE 1024
 
 /**
  * Maximal number of segments in storage and under transmission.
  */
+//15 also a good value
 #define MAX_WINDOW_SIZE 100
 
 /**
@@ -73,11 +75,13 @@ typedef struct
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
 	size_t threshold;
-	size_t nextOffset;      // The next offset the connection is waiting for. Initially it is 0.
+	size_t nextOffset;      // The next offset the connection will send if the window moves. Initially it is 0.
 
 	CnetAddr addr;          // Address of the connected node
 	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
-	CnetTime deviation;		  // Safety margin for the variation in estimatedRTT.
+	CnetTime deviation;		// Safety margin for the variation in estimatedRTT.
+	int ackCounter;			// Congestion control: counts duplicated acks
+	size_t lastAckOffset;	// Congestion control: stores the last ACK received
 } CONNECTION;
 
 /**
@@ -136,6 +140,8 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.addr = addr;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
+	con.ackCounter = 0;
+	con.lastAckOffset = 0;
 
 	char key[5];
 	int2string(key, addr);
@@ -284,8 +290,9 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
-	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /*outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
+	//fprintf(stderr, "start timer: %d %p\n", outSeg->timerId, (void *) outSeg);
+	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
 
 	if (vector_nitems(con->outSegments) < con->windowSize) {
 		#if LOGGING == true
@@ -307,11 +314,14 @@ void transmit_segments(CnetAddr addr)
 	int timeout = 1;
 
   //window not saturated and segments available
-	while (con->numSentSegments < con->windowSize &&
-				 con->numSentSegments < vector_nitems(con->outSegments)) {
+	//fprintf(stderr, "numSentSegments: %ld windowSize: %ld outSeg: %d\n", con->numSentSegments, con->windowSize, vector_nitems(con->outSegments));
+		//while (con->numSentSegments < con->windowSize &&
+		//		con->numSentSegments < vector_nitems(con->outSegments)) {
+		while (con->numSentSegments < vector_nitems(con->outSegments)) {
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, NULL);
 		if (USE_GEARING) {
 			outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
+			//fprintf(stderr, "start timer: %d %p\n", outSeg->timerId, (void * ) outSeg);
 		} else {
 			transmit_segment(outSeg);
 		}
@@ -362,6 +372,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		outSeg.seg = seg;
 		outSeg.size = segSize;
 		outSeg.timesSend = 0;
+		outSeg.timerId = -1;
 
 		//add created segment to vector of sendable segments
 		vector_append(con->outSegments, &outSeg, sizeof(outSeg));
@@ -406,8 +417,37 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	int numSentSegments = con->numSentSegments;
 	size_t payloadSize = unmarshal_segment(segment, &header, &payload, size);
-	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart);
+	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart); //the offset the node is waiting for
 
+	//congestion control ala Reno
+	if(header.ackOffset == con->lastAckOffset) {
+		con->ackCounter++;
+	} else {
+		con->ackCounter = 0;
+		con->lastAckOffset = header.ackOffset;
+	}
+	
+	//calculate if fast recovery phase should be started
+	if (con->ackCounter > 3 && payloadSize != 0) {
+		if(con->windowSize > 1) {
+			con->threshold = con->windowSize / 2;
+			con->windowSize /= 2;
+		}
+		#if LOGGING == true
+		printf("%lld: [Reno_3_dup_ack] to_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+		#endif
+		
+		//perform fast retransmit 
+		if(vector_nitems(con->outSegments) > 0) {
+			size_t segmentSize;
+			OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+			//fprintf(stderr, "timer id: %d %p\n", outSeg->timerId, (void *) outSeg);
+			
+			CHECK(CNET_stop_timer(outSeg->timerId));
+			transmit_segment(outSeg);
+		}
+	}
+	
 	/* ignore duplicated segments */
 	if (!acknowledged(header.offset + payloadSize, ackOffset) &&
 			!buffer_check(con->inBuf, header.offset) && payloadSize > 0)
