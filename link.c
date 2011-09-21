@@ -256,6 +256,8 @@ void transmit_frame(int link)
     CNET_enable_application(ALLNODES);
   }
   #endif
+  
+  printf("%s's link %d queue size: %d\n", nodeinfo.nodename, link, link_get_queue_size(link));
 }
 
 
@@ -368,6 +370,7 @@ void link_receive(int link, char *data, size_t size)
 
 /**
  * Returns the bandwidth for the given link.
+ *  @param link Link to get the bandwidth for.
  */
 int link_get_bandwidth(int link)
 {
@@ -377,12 +380,25 @@ int link_get_bandwidth(int link)
 
 /**
  * Returns the MTU for the given link.
+ * @param link Link to get the MTU for.
  */
 int link_get_mtu(int link)
 {
 	assert(link <= nodeinfo.nlinks);
 	return linkinfo[link].mtu;
 }
+
+/**
+ * Returns the number of pending frames
+ * on the given outgoing link.
+ * @param link Link to get the queue size for.
+ */
+int link_get_queue_size(int link)
+{
+	assert(link <= nodeinfo.nlinks);
+	return queue_nitems(linkData[link].queue);
+}
+
 
 /**
  * Returns the number of direct neighbours.
