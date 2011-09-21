@@ -10,7 +10,9 @@
 #
 
 rm *.o
-mkdir tmp
+if [ ! -e tmp ]; then
+	mkdir tmp
+fi
 
 #$1 = period of execution
 #$2 = topology file
