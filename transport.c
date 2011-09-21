@@ -24,11 +24,13 @@
 /**
  * Size of a segment in byte.
  */
+//8182 also a good value
 #define SEGMENT_SIZE 1024
 
 /**
  * Maximal number of segments in storage and under transmission.
  */
+//15 also a good value
 #define MAX_WINDOW_SIZE 100
 
 /**
@@ -78,12 +80,14 @@ typedef struct
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
 	size_t threshold;
-	size_t nextOffset;      // The next offset the connection is waiting for. Initially it is 0.
+	size_t nextOffset;      // The next offset the connection will send if the window moves. Initially it is 0.
 
 	CnetAddr addr;          // Address of the connected node
 	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
 	CnetTime deviation;		  // Safety margin for the variation in estimatedRTT.
 	CnetTime lastSendAck;
+	int ackCounter;					// Congestion control: counts duplicated acks
+	size_t lastAckOffset;		// Congestion control: stores the last ACK received
 } CONNECTION;
 
 /**
@@ -142,7 +146,12 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.addr = addr;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
+<<<<<<< HEAD
 	con.lastSendAck = 0;
+=======
+	con.ackCounter = 0;
+	con.lastAckOffset = 0;
+>>>>>>> ca2cb16fb5a78569fefd27f4397a67d31cf2a8c9
 
 	char key[5];
 	int2string(key, addr);
@@ -369,6 +378,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		outSeg.seg = seg;
 		outSeg.size = segSize;
 		outSeg.timesSend = 0;
+		outSeg.timerId = -1;
 
 		//add created segment to vector of sendable segments
 		vector_append(con->outSegments, &outSeg, sizeof(outSeg));
@@ -413,7 +423,35 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	int numSentSegments = con->numSentSegments;
 	size_t payloadSize = unmarshal_segment(segment, &header, &payload, size);
-	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart);
+	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart); //the offset the node is waiting for
+
+	//congestion control ala Reno
+	if(header.ackOffset == con->lastAckOffset) {
+		con->ackCounter++;
+	} else {
+		con->ackCounter = 0;
+		con->lastAckOffset = header.ackOffset;
+	}
+
+	//calculate if fast recovery phase should be started
+	if (con->ackCounter > 3 && payloadSize != 0) {
+		if(con->windowSize > 1) {
+			con->threshold = con->windowSize / 2;
+			con->windowSize /= 2;
+		}
+		#if LOGGING == true
+		printf("%lld: [Reno_3_dup_ack] to_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+		#endif
+
+		//perform fast retransmit
+		if(vector_nitems(con->outSegments) > 0) {
+			size_t segmentSize;
+			OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+
+			CHECK(CNET_stop_timer(outSeg->timerId));
+			transmit_segment(outSeg);
+		}
+	}
 
 	/* ignore duplicated segments */
 	if (!acknowledged(header.offset + payloadSize, ackOffset) &&
