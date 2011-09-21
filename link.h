@@ -14,6 +14,7 @@ void link_init();
 
 int link_get_bandwidth(int link);
 int link_get_mtu(int link);
+int link_get_queue_size(int link);
 
 int link_num_links();
 
