@@ -30,7 +30,7 @@ void Analyze::readFile(const string& input)
 	
 	 bool isData = false;
 	 string toNode = "";
-	 long int simulationTime = 0;
+	 int64_t simulationTime = 0;
 	
 	//read one line from the stream
 	while(getline(stream,st)){
@@ -63,7 +63,7 @@ void Analyze::readFile(const string& input)
   }
 }
 
-void Analyze::addData(const string& toNode, const string& fromNode, int simTime, int msgs, int latency, double throughput)
+void Analyze::addData(const std::string& toNode, const std::string& fromNode, int64_t simTime, int msgs, int latency, double throughput)
 {
 	
 	if(toNodeMap.find(toNode) != toNodeMap.end()) // toNode already exists
@@ -98,7 +98,7 @@ void Analyze::addData(const string& toNode, const string& fromNode, int simTime,
 	}
 }
 
-void Analyze::addData(node* node, int simTime, int msgs, int latency, double throughput)
+void Analyze::addData(node* node, int64_t simTime, int msgs, int latency, double throughput)
 {
 	node->time.push_back(simTime);
 	node->msgs.push_back(msgs);
@@ -121,7 +121,7 @@ void Analyze::write(const string& output)
 			
 			//cout << "\t" << jt->first << " => " <<  endl;
 			
-			list<int>::iterator time_it;
+			list<int64_t>::iterator time_it;
 			list<int>::iterator msgs_it = jt->second->msgs.begin();
 			list<int>::iterator latency_it = jt->second->latency.begin();
 			list<double>::iterator throughput_it = jt->second->throughput.begin();

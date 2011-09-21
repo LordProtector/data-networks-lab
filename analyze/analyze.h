@@ -10,10 +10,11 @@
 #include <map>
 #include <list>
 #include <utility>
+#include <sys/types.h>
 
 
 struct node {
-	std::list<int> time;
+	std::list<int64_t> time;
 	std::list<int> msgs;
 	std::list<int> latency;
 	std::list<double> throughput;
@@ -39,9 +40,9 @@ private:
 	
 	void write(const std::string& file);
 	
-	void addData(const std::string& toNode, const std::string& fromNode, int simTime, int msgs, int latency, double throughput);
+	void addData(const std::string& toNode, const std::string& fromNode, int64_t simTime, int msgs, int latency, double throughput);
 	
-	void addData(node* node, int simTime, int msgs, int latency, double throughput);
+	void addData(node* node, int64_t simTime, int msgs, int latency, double throughput);
 	
 	//to node from node
 	toNode_t toNodeMap;
