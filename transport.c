@@ -55,6 +55,8 @@
 
 #define LOGGING true
 
+#define EXPLICIT_ACK true
+
 
 /**
  * Data structure for one connection.
@@ -269,10 +271,6 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 void transmit_segment(OUT_SEGMENT *outSeg)
 {
 	CONNECTION *con = get_connection(outSeg->addr);
-//~ bool isLast = outSeg->seg->header.offset & MAX_SEGMENT_OFFSET;
-//~ size_t offset = outSeg->seg->header.offset ^ (isLast ? MAX_SEGMENT_OFFSET : 0);
-//~ size_t ackOffset = outSeg->seg->header.ackOffset;
-//~ printf("transmit segment: dest: %d offset: %d ackOffset: %d times send: %d\n",outSeg->addr,offset,ackOffset, outSeg->timesSend);
 
 	/* Congestion control */
 	if (outSeg->timesSend > 1 && con->windowSize > 1) {
@@ -287,7 +285,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	outSeg->timesSend++;
 	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, get_timeout(con), (CnetData) outSeg);
+	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /*outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
 
 	if (vector_nitems(con->outSegments) < con->windowSize) {
 		#if LOGGING == true
@@ -482,6 +480,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		transmit_segments(addr);
 	}
 
+	#if EXPLICIT_ACK == true
 	/* In case piggybacking ack is not possible, send it directly */
 	if (payloadSize != 0 && numSentSegments == con->numSentSegments) {
 		SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
@@ -498,6 +497,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		network_transmit(addr, (char *)seg, segSize);
 		free(seg);
 	}
+	#endif
 }
 
 /**
