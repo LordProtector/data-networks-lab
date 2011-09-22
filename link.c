@@ -263,7 +263,7 @@ void transmit_frame(int link)
       free(msg);
       timeout = transmission_delay(length, link) + LINK_DELAY;
 
-	  add_load(link, length);
+	  add_load(link, length * 8);
     }
     CNET_start_timer(LINK_TIMER, timeout, link);
     linkData[link].busy = true;
@@ -441,7 +441,11 @@ float link_get_load(int link)
 	remove_load(link);
 	size_t bits_in_queue = 0; //TODO calculate #bits in queue
 	size_t bits = linkData[link].sendBits + bits_in_queue;
-	float load = ((float) bits / ((float) INTERVALL_CALCULATE_LOAD * MICRO)) / (float) linkinfo[link].bandwidth;
+	float time = INTERVALL_CALCULATE_LOAD;
+	if(time > nodeinfo.time_in_usec) {
+		time = nodeinfo.time_in_usec;
+	}
+	float load = ((float) bits / ((float) time * MICRO)) / (float) linkinfo[link].bandwidth;
 
 	fprintf(stderr, "Load at node %d of link %d is %f\n", nodeinfo.address, link, load);
 

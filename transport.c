@@ -146,12 +146,9 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.addr = addr;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
-<<<<<<< HEAD
 	con.lastSendAck = 0;
-=======
 	con.ackCounter = 0;
 	con.lastAckOffset = 0;
->>>>>>> ca2cb16fb5a78569fefd27f4397a67d31cf2a8c9
 
 	char key[5];
 	int2string(key, addr);
