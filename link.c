@@ -78,6 +78,12 @@
  */
 #define FRAME_ID_LIMIT (UINT8_MAX >> 1)
 
+/**
+ * Interval in which the load should be calculated
+ * currently 10s
+ */
+#define INTERVALL_CALCULATE_LOAD 10000000
+
 
 /* Structs */
 
@@ -95,11 +101,20 @@ typedef struct link_t
   uint8_t  ordering;            // expected ordering of next received frame
   char     buffer[BUFFER_SIZE]; // input buffer
   size_t   size;                // how far the buffer is filled
-  CnetTime busyTime;
-  CnetTime lastStatusChange;
+  CnetTime busyTime;						// number of microseconds this link is busy
+  CnetTime lastStatusChange;		// time busy status changed the last time
+  size_t   sendBits;            // how many bits are send during the interval
+  QUEUE    frameSizeCounter;    // stores the last sizes of frames being send
 } link_t;
 
 typedef unsigned char * buf_t;
+
+typedef struct size_element_t
+{
+	CnetTime time;				// time point when element was send
+	size_t   size;				// size of the element
+	
+} size_element_t;
 
 
 /* Variables */
@@ -111,6 +126,9 @@ link_t *linkData;
 
 
 /* Private functions */
+
+void add_load(int link, size_t size);
+
 
 /**
  * Encodes payload, such that some error correction is possible.
@@ -243,9 +261,11 @@ void transmit_frame(int link)
     } else {
       CHECK(ph_status);
       //~ printf(" DATA transmitted: %d bytes\n", length);
-      msg = queue_remove(linkData[link].queue, &length);
+      msg = queue_remove(linkData[link].queue, &length);	  
       free(msg);
       timeout = transmission_delay(length, link) + LINK_DELAY;
+
+	  add_load(link, length * 8);
     }
     CNET_start_timer(LINK_TIMER, timeout, link);
     if (!linkData[link].busy) {
@@ -290,6 +310,7 @@ void link_transmit(int link, char *data, size_t size)
     //return;
   //}
 
+  link_get_load(link);
   FRAME frame;
   frame_header header;
   size_t remainingBytes = size;
@@ -386,6 +407,72 @@ void link_receive(int link, char *data, size_t size)
 }
 
 /**
+ * Removes old data from the queue of the frameSizeCounter which are older
+ * than the limit in INTERVALL_CALCULATE_LOAD.
+ * @param link The link to remove load for.
+ */
+void remove_load(int link)
+{
+	size_t len;
+	size_element_t *tmp_element;
+	size_t num_items = queue_nitems(linkData[link].frameSizeCounter);
+
+	if (num_items) {
+		tmp_element = queue_peek(linkData[link].frameSizeCounter, &len);
+
+		//remove old data
+		while(nodeinfo.time_in_usec - tmp_element->time > INTERVALL_CALCULATE_LOAD) {
+			tmp_element = queue_remove(linkData[link].frameSizeCounter, &len);
+			linkData[link].sendBits -= tmp_element->size;
+			free(tmp_element);
+			num_items--;
+			if(num_items) {
+				tmp_element = queue_peek(linkData[link].frameSizeCounter, &len);
+			} else {
+				break;
+			}
+		}
+	}
+}
+
+/**
+ * Adds load to the load queue. Should be called if data are transmitted over
+ * a link.
+ */
+void add_load(int link, size_t size)
+{
+	size_element_t tmp_element;
+	tmp_element.size = size;
+	tmp_element.time = nodeinfo.time_in_usec;
+	queue_add(linkData[link].frameSizeCounter, &tmp_element, sizeof(tmp_element));
+	linkData[link].sendBits  += size;
+	remove_load(link);
+}
+
+
+/**
+ * Returns the load of the given link.
+ * @param link Link to calculate the load for.
+ */
+float link_get_load(int link)
+{
+	//ensure that the calculations are done only for the latest data send
+	remove_load(link);
+	size_t bits_in_queue = 0; //TODO calculate #bits in queue
+	size_t bits = linkData[link].sendBits + bits_in_queue;
+	float time = INTERVALL_CALCULATE_LOAD;
+	if(time > nodeinfo.time_in_usec) {
+		time = nodeinfo.time_in_usec;
+	}
+	float load = ((float) bits / ((float) time * MICRO)) / (float) linkinfo[link].bandwidth;
+
+	//fprintf(stderr, "Load at node %d of link %d is %f\n", nodeinfo.address, link, load);
+
+	return load;
+ 
+}
+
+/**
  * Returns the bandwidth for the given link.
  *  @param link Link to get the bandwidth for.
  */
@@ -445,5 +532,7 @@ void link_init()
     linkData[i].size           = 0;
     linkData[i].busyTime       = 0;
     linkData[i].lastStatusChange = 0;
+		linkData[i].frameSizeCounter = queue_new();
+		linkData[i].sendBits       = 0;
   }
 }

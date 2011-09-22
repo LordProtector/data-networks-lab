@@ -146,12 +146,9 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.addr = addr;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
 	con.deviation = TRANSPORT_TIMEOUT;
-<<<<<<< HEAD
 	con.lastSendAck = 0;
-=======
 	con.ackCounter = 0;
 	con.lastAckOffset = 0;
->>>>>>> ca2cb16fb5a78569fefd27f4397a67d31cf2a8c9
 
 	char key[5];
 	int2string(key, addr);
@@ -329,7 +326,9 @@ void transmit_segments(CnetAddr addr)
 		if (USE_GEARING) {
 			outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
 		} else {
-			transmit_segment(outSeg);
+			//if(con->numSentSegments < con->windowSize) {
+				transmit_segment(outSeg);
+			//}
 		}
 		con->numSentSegments++;
 		outSeg->sendTime = nodeinfo.time_in_usec;
@@ -447,8 +446,11 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		if(vector_nitems(con->outSegments) > 0) {
 			size_t segmentSize;
 			OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
-
-			CHECK(CNET_stop_timer(outSeg->timerId));
+			if(outSeg->timerId != -1){
+				CHECK(CNET_stop_timer(outSeg->timerId));
+			} else {
+				fprintf(stderr, "found segment with invalid timer id to address %d at node %d", outSeg->addr, nodeinfo.address);
+			}
 			transmit_segment(outSeg);
 		}
 	}

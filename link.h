@@ -12,6 +12,7 @@ void link_transmit(int link, char *data, size_t size);
 void link_receive(int link, char *data, size_t size);
 void link_init();
 
+float link_get_load(int link);
 int link_get_bandwidth(int link);
 int link_get_mtu(int link);
 int link_get_queue_size(int link);
