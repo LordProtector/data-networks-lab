@@ -95,6 +95,8 @@ typedef struct link_t
   uint8_t  ordering;            // expected ordering of next received frame
   char     buffer[BUFFER_SIZE]; // input buffer
   size_t   size;                // how far the buffer is filled
+  CnetTime busyTime;
+  CnetTime lastStatusChange;
 } link_t;
 
 typedef unsigned char * buf_t;
@@ -246,9 +248,22 @@ void transmit_frame(int link)
       timeout = transmission_delay(length, link) + LINK_DELAY;
     }
     CNET_start_timer(LINK_TIMER, timeout, link);
-    linkData[link].busy = true;
+    if (!linkData[link].busy) {
+      linkData[link].busy = true;
+      linkData[link].lastStatusChange = nodeinfo.time_in_usec;
+      #if SHOW_QUEUE_LENGTH == true
+      int utilization = 100 * linkData[link].busyTime / MAX(nodeinfo.time_in_usec, 1);
+      printf("%lld: [utilization] %d for link %d\n ", nodeinfo.time_in_usec, utilization, link);
+      #endif
+    }
   } else {
+    assert(linkData[link].busy);
     linkData[link].busy = false;
+    linkData[link].busyTime += nodeinfo.time_in_usec - linkData[link].lastStatusChange;
+    #if SHOW_QUEUE_LENGTH == true
+    int utilization = 100 * linkData[link].busyTime / MAX(nodeinfo.time_in_usec, 1);
+    printf("%lld: [utilization] %d for link %d\n ", nodeinfo.time_in_usec, utilization, link);
+    #endif
   }
 
   #ifdef MILESTONE_2
@@ -271,6 +286,10 @@ void transmit_frame(int link)
  */
 void link_transmit(int link, char *data, size_t size)
 {
+  //if (queue_nitems(linkData[link].queue) >= 1000 && size < 10) {
+    //return;
+  //}
+
   FRAME frame;
   frame_header header;
   size_t remainingBytes = size;
@@ -424,5 +443,7 @@ void link_init()
     linkData[i].recId          = 0;
     linkData[i].ordering       = 0;
     linkData[i].size           = 0;
+    linkData[i].busyTime       = 0;
+    linkData[i].lastStatusChange = 0;
   }
 }

@@ -83,6 +83,7 @@ typedef struct {
 	CnetAddr destAddr;	// destination address
 	int weight;			// weight to reach destination
 	int minMTU;			// minimal MTU on path to destination
+	int minBWD;			// minimal bandwidth on path to destination
 } DISTANCE_INFO;
 
 typedef struct

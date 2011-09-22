@@ -42,6 +42,7 @@
 typedef struct {
 	int weight;			// weight to reach destination
 	int minMTU;			// minimal MTU on path to destination
+	int minBWD;			// minimal bandwidth on path to destination
 } ROUTING_ENTRY;
 
 void int2string(char* s, int i);
@@ -371,6 +372,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 		for(int i = 0; i <= link_num_links(); i++) {
 			newEntry[i].weight = INT_MAX;
 			newEntry[i].minMTU = INT_MAX;
+			newEntry[i].minBWD = INT_MAX;
 		}
 		hashtable_add(routing_table, key, newEntry, sizeof(newEntry));
 		entry = routing_lookup(inDistInfo.destAddr);
@@ -390,6 +392,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	/* update routing table */
 	entry[link].weight = inDistInfo.weight + get_weight(link);
 	entry[link].minMTU = MIN(inDistInfo.minMTU, link_get_mtu(link));
+	entry[link].minBWD = MIN(inDistInfo.minBWD, link_get_bandwidth(link));
 
 	/* Did the update led to changes in the forward decision? */
 	bool bestChoiceChanged = (bestChoice == link);
@@ -397,6 +400,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 		outDistInfo->destAddr = inDistInfo.destAddr;
 		outDistInfo->weight = entry[link].weight;
 		outDistInfo->minMTU = entry[link].minMTU;
+		outDistInfo->minBWD = entry[link].minBWD;
 
 		/* update forwarding table */
 		update_forwarding_table(inDistInfo.destAddr, bestChoice);
@@ -407,7 +411,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 
 // 	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
 // 	for(int i = 1; i <= link_num_links(); i++) {
-// 		printf("%d ", entry[i].weight);
+// 		printf("weight %d minBWD: %d ", entry[i].weight, entry[i].minBWD);
 // 	}
 // 	puts("");puts("");
 
@@ -447,9 +451,14 @@ ROUTING_ENTRY *routing_lookup(CnetAddr addr)
  */
 int get_weight(int link)
 {
-	//return 10000000 * 1.0 / link_get_bandwidth(link);
-	double base = (link_get_bandwidth(link)-5.);
-	return 1000000. *  (-0.04*(base * base * base)+6.);
+	return 10000000 / link_get_bandwidth(link);
+// 	double base = (link_get_bandwidth(link)/1000000.-5.);
+// 	return (-0.04*(base * base * base)+6.);
+}
+
+int get_bandwidth(CnetAddr addr)
+{
+	return 0;
 }
 
 
@@ -477,7 +486,9 @@ void routing_init()
 	DISTANCE_INFO distInfo[1];
 	distInfo[0].weight = 0;
 	distInfo[0].minMTU = INT_MAX;
+	distInfo[0].minBWD = INT_MAX;
 	distInfo[0].destAddr = network_get_address();
+	
 
 	broadcast_distance_info(distInfo, sizeof(distInfo));
 }
