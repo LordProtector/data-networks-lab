@@ -447,7 +447,7 @@ float link_get_load(int link)
 	}
 	float load = ((float) bits / ((float) time * MICRO)) / (float) linkinfo[link].bandwidth;
 
-	fprintf(stderr, "Load at node %d of link %d is %f\n", nodeinfo.address, link, load);
+	//fprintf(stderr, "Load at node %d of link %d is %f\n", nodeinfo.address, link, load);
 
 	return load;
  
