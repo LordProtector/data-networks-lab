@@ -31,7 +31,7 @@
  * Maximal number of segments in storage and under transmission.
  */
 //15 also a good value
-#define MAX_WINDOW_SIZE 16
+#define MAX_WINDOW_SIZE 15
 
 /**
  * Maximal offset of the window in byte.
@@ -456,7 +456,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			if(outSeg->timerId != -1){
 				CHECK(CNET_stop_timer(outSeg->timerId));
 			} else {
-				fprintf(stderr, "found segment with invalid timer id to address %d at node %d", outSeg->addr, nodeinfo.address);
+				fprintf(stderr, "found segment with invalid timer id to address %d at node %d\n", outSeg->addr, nodeinfo.address);
 			}
 			transmit_segment(outSeg);
 		}
@@ -504,7 +504,9 @@ printf("%d %d %d %d\n", outSeg->offset, endOffset, header.ackOffset, outSeg->tim
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
 			update_rtt(con, sampleRTT);
-			CHECK(CNET_stop_timer(outSeg->timerId));
+			if(outSeg->timerId != -1) {
+				CHECK(CNET_stop_timer(outSeg->timerId));
+			}
 			free(outSeg->seg);
 			free(outSeg);
 			con->numSentSegments--;
