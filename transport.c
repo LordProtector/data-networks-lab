@@ -291,22 +291,22 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 		con->threshold = con->windowSize / 2;
 		con->windowSize = 1;
 	}
+	
+	OUT_SEGMENT *winSeg = vector_peek(con->outSegments, con->windowSize, NULL);
 
-	#if LOGGING == true
-		printf("%lld: [transmit_segment] to_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, outSeg->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
-	#endif
-
-	outSeg->timesSend++;
-	outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
-	network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-	outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /* outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
-	con->lastSendAck = nodeinfo.time_in_usec;
-
-	if (vector_nitems(con->outSegments) < con->windowSize) {
+	if (winSeg == NULL || acknowledged(outSeg->offset, winSeg->offset)) {
 		#if LOGGING == true
-		printf("%lld: [enable_application_window_unsaturated] to_node: %d\n", nodeinfo.time_in_usec, outSeg->addr);
+		printf("%lld: [transmit_segment] to_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, outSeg->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
 		#endif
-		CNET_enable_application(outSeg->addr);
+
+		outSeg->timesSend++;
+		outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
+		network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
+		outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /* outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
+		con->lastSendAck = nodeinfo.time_in_usec;
+	} else {
+		outSeg->timerId = -1;
+		con->numSentSegments--;
 	}
 }
 
@@ -322,19 +322,18 @@ void transmit_segments(CnetAddr addr)
 	int timeout = 1;
 
   //window not saturated and segments available
-	while (con->numSentSegments < vector_nitems(con->outSegments) &&
-				 con->numSentSegments < con->windowSize) {
-		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, NULL);
-		if (USE_GEARING) {
-			outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
-		} else {
-			//if(con->numSentSegments < con->windowSize) {
+	for (int i = 0; i < con->windowSize && i < vector_nitems(con->outSegments); i++) {
+		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, i, NULL);
+		if (outSeg->timerId == -1) {
+			if (USE_GEARING) {
+				outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
+			} else {
 				transmit_segment(outSeg);
-			//}
+			}
+			con->numSentSegments++;
+			outSeg->sendTime = nodeinfo.time_in_usec;
+			timeout += 500;
 		}
-		con->numSentSegments++;
-		outSeg->sendTime = nodeinfo.time_in_usec;
-		timeout += 500;
 	}
 }
 
@@ -499,17 +498,17 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		size_t endOffset = outSeg->offset + (outSeg->size - sizeof(seg->header));
 		endOffset %= MAX_SEGMENT_OFFSET;
 		assert(acknowledged(outSeg->offset - 1, header.ackOffset));
-printf("%d %d %d %d\n", outSeg->offset, endOffset, header.ackOffset, outSeg->timerId);
+
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
 			update_rtt(con, sampleRTT);
-			if(outSeg->timerId != -1) {
+			if (outSeg->timerId != -1) {
 				CHECK(CNET_stop_timer(outSeg->timerId));
+				con->numSentSegments--;
 			}
 			free(outSeg->seg);
 			free(outSeg);
-			con->numSentSegments--;
 
 			if(vector_nitems(con->outSegments) == 0) break; // no more elements available
 
