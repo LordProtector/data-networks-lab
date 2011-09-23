@@ -493,11 +493,10 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	/* process acknowledgment */
 	if(vector_nitems(con->outSegments) > 0) {
-		size_t segmentSize;
-		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, NULL);
 
 		SEGMENT *seg = outSeg->seg;
-		size_t endOffset = outSeg->offset + (segmentSize - sizeof(seg->header));
+		size_t endOffset = outSeg->offset + (outSeg->size - sizeof(seg->header));
 		endOffset %= MAX_SEGMENT_OFFSET;
 		assert(acknowledged(outSeg->offset - 1, header.ackOffset));
 printf("%d %d %d %d\n", outSeg->offset, endOffset, header.ackOffset, outSeg->timerId);
@@ -512,9 +511,9 @@ printf("%d %d %d %d\n", outSeg->offset, endOffset, header.ackOffset, outSeg->tim
 
 			if(vector_nitems(con->outSegments) == 0) break; // no more elements available
 
-			outSeg = vector_peek(con->outSegments, 0, &segmentSize);
+			outSeg = vector_peek(con->outSegments, 0, NULL);
 			seg = outSeg->seg;
-			endOffset  = outSeg->offset + segmentSize - sizeof(seg->header);
+			endOffset  = outSeg->offset + (outSeg->size - sizeof(seg->header));
 			endOffset %= MAX_SEGMENT_OFFSET;
 
 			/* Congestion control */
