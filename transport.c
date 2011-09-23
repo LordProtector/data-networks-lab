@@ -62,6 +62,8 @@
 
 #define EXPLICIT_ACK true
 
+#define USE_RENO true
+
 
 /**
  * Data structure for one connection.
@@ -423,8 +425,11 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart); //the offset the node is waiting for
 
 	//congestion control ala Reno
+#if USE_RENO == true
 	if(header.ackOffset == con->lastAckOffset) {
-		con->ackCounter++;
+		if(payloadSize == 0){ // only increase if a non piggybacked ACK is received
+			con->ackCounter++;
+		}
 	} else {
 		con->ackCounter = 0;
 		con->lastAckOffset = header.ackOffset;
@@ -432,6 +437,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	//calculate if fast recovery phase should be started
 	if (con->ackCounter > 3 && payloadSize != 0) {
+		con->ackCounter = 0;
 		if(con->windowSize > 1) {
 			con->threshold = con->windowSize / 2;
 			con->windowSize /= 2;
@@ -452,6 +458,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			transmit_segment(outSeg);
 		}
 	}
+#endif
 
 	/* ignore duplicated segments */
 	if (!acknowledged(header.offset + payloadSize, ackOffset) &&
