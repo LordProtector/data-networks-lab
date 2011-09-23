@@ -60,8 +60,6 @@
 
 #define USE_GEARING true
 
-#define LOGGING true
-
 #define EXPLICIT_ACK true
 
 

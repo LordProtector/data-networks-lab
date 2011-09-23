@@ -6,6 +6,10 @@
  * Implementation of milstone 3 of the data networks lab 2011
  */
 
+#define LOGGING true
+
+#define LOAD_OUTPUT false
+
 /* include headers */
 #include <stdlib.h>
 #include <string.h>
@@ -103,6 +107,23 @@ static EVENT_HANDLER(gearing_timeout)
   transmit_segment((void *)data); // data = pointer to OUT_SEGMENT
 }
 
+static EVENT_HANDLER(cyclic_output_timeout)
+{
+	#if LOGGING == true
+	#if LOAD_OUTPUT == true
+	for (int i = 1; i <= nodeinfo.nlinks; i++) {
+		float load = link_get_load(1);
+
+		
+		printf("%lld: [load_output] on_link: %d load: %f\n\n", nodeinfo.time_in_usec, i, load);
+		
+	}
+	CNET_start_timer(CYCLIC_OUTPUT_TIMER, (CnetTime) 1000, (CnetData) NULL);
+	#endif
+	#endif
+	
+}
+
 
 
 /**
@@ -119,8 +140,11 @@ EVENT_HANDLER(reboot_node)
 	CHECK(CNET_set_handler(TRANSPORT_TIMER,     transport_timeout, 0));
 	CHECK(CNET_set_handler(ROUTING_TIMER,		routing_timeout, 0));
 	CHECK(CNET_set_handler(GEARING_TIMER,		gearing_timeout, 0));
+	CHECK(CNET_set_handler(CYCLIC_OUTPUT_TIMER,	cyclic_output_timeout, 0));
 
 	link_init();
 	network_init();
 	transport_init();
+
+	CNET_start_timer(CYCLIC_OUTPUT_TIMER, (CnetTime) 1000, (CnetData) NULL);
 }
