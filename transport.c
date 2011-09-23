@@ -1,7 +1,7 @@
 /**
  * transport.c
  *
- * @autors Stefan Tombers, Alexander Bunte, Jonas Bürse
+ * @authors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of the transport layer.
  *
@@ -103,6 +103,7 @@ typedef struct
 	size_t size;              // Size of the out segment
 	SEGMENT *seg;             // Pointer to the data stored in the segment.
 	int timesSend;
+	uint32_t offset;
 } OUT_SEGMENT;
 
 
@@ -321,7 +322,8 @@ void transmit_segments(CnetAddr addr)
 	int timeout = 1;
 
   //window not saturated and segments available
-	while (con->numSentSegments < vector_nitems(con->outSegments)) {
+	while (con->numSentSegments < vector_nitems(con->outSegments) &&
+				 con->numSentSegments < con->windowSize) {
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, con->numSentSegments, NULL);
 		if (USE_GEARING) {
 			outSeg->timerId = CNET_start_timer(GEARING_TIMER, timeout, (CnetData) outSeg);
@@ -378,6 +380,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		outSeg.size = segSize;
 		outSeg.timesSend = 0;
 		outSeg.timerId = -1;
+		outSeg.offset = header.offset;
 
 		//add created segment to vector of sendable segments
 		vector_append(con->outSegments, &outSeg, sizeof(outSeg));
@@ -489,10 +492,10 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 
 		SEGMENT *seg = outSeg->seg;
-		size_t endOffset = seg->header.offset + segmentSize - sizeof(seg->header);
+		size_t endOffset = outSeg->offset + (segmentSize - sizeof(seg->header));
 		endOffset %= MAX_SEGMENT_OFFSET;
-		assert(acknowledged(seg->header.offset - 1, header.ackOffset));
-
+		assert(acknowledged(outSeg->offset - 1, header.ackOffset));
+printf("%d %d %d %d\n", outSeg->offset, endOffset, header.ackOffset, outSeg->timerId);
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
