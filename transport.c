@@ -31,7 +31,7 @@
  * Maximal number of segments in storage and under transmission.
  */
 //15 also a good value
-#define MAX_WINDOW_SIZE 100
+#define MAX_WINDOW_SIZE 16
 
 /**
  * Maximal offset of the window in byte.
@@ -56,7 +56,7 @@
 /**
  * Minimum time before we send another ack
  */
-#define ACK_TIME 1000
+#define ACK_TIME 10000
 
 #define USE_GEARING true
 
