@@ -135,7 +135,7 @@ void Analyze::write(const string& output)
 			fstr.close();
 		}
 	}
-	cout << "Witing data files done." << endl;
+	cout << "Writing data files done." << endl;
 	
 	writeGnuplut(output);
 }
