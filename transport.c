@@ -514,7 +514,7 @@ printf("%d %d %d %d\n", outSeg->offset, endOffset, header.ackOffset, outSeg->tim
 
 			outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 			seg = outSeg->seg;
-			endOffset  = seg->header.offset + segmentSize - sizeof(seg->header);
+			endOffset  = outSeg->offset + segmentSize - sizeof(seg->header);
 			endOffset %= MAX_SEGMENT_OFFSET;
 
 			/* Congestion control */
