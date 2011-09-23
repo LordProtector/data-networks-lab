@@ -31,7 +31,7 @@
  * Maximal number of segments in storage and under transmission.
  */
 //15 also a good value
-#define MAX_WINDOW_SIZE 16
+#define MAX_WINDOW_SIZE 1
 
 /**
  * Maximal offset of the window in byte.
@@ -302,7 +302,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 		outSeg->timesSend++;
 		outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 		network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-		outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, /* outSeg->timesSend */ get_timeout(con), (CnetData) outSeg);
+		outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, outSeg->timesSend * get_timeout(con), (CnetData) outSeg);
 		con->lastSendAck = nodeinfo.time_in_usec;
 	} else {
 		outSeg->timerId = -1;
