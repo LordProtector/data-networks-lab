@@ -141,8 +141,8 @@ CONNECTION *create_connection(CnetAddr addr)
 	con.bufferStart = 0;
 	con.outSegments = vector_new();
 	con.numSentSegments = 0;
-	con.windowSize = 2;
-	con.threshold = 16;
+	con.windowSize = 1;
+	con.threshold = 8;
 	con.nextOffset = 0;
 	con.addr = addr;
 	con.estimatedRTT = TRANSPORT_TIMEOUT;
@@ -174,8 +174,8 @@ bool acknowledged(size_t offset, size_t ackOffset)
 	offset    %= MAX_SEGMENT_OFFSET;
 	ackOffset %= MAX_SEGMENT_OFFSET;
 
-	return (offset <= ackOffset && ackOffset - offset < MAX_WINDOW_OFFSET) ||
-				 ((MAX_SEGMENT_OFFSET - offset) + ackOffset < MAX_WINDOW_OFFSET);
+	return (offset <= ackOffset && ackOffset - offset <= MAX_WINDOW_OFFSET) ||
+				 ((MAX_SEGMENT_OFFSET - offset) + ackOffset <= MAX_WINDOW_OFFSET);
 }
 
 /**
@@ -296,7 +296,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 
 	if (winSeg == NULL || acknowledged(outSeg->offset, winSeg->offset)) {
 		#if LOGGING == true
-		printf("%lld: [transmit_segment] to_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, outSeg->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+		printf("%lld: [transmit_segment] to_node: %d threshold: %d window_size: %d numOutSeg: %d numSentSegments %d\n", nodeinfo.time_in_usec, outSeg->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
 		#endif
 
 		outSeg->timesSend++;
@@ -415,7 +415,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	CONNECTION *con = get_connection(addr);
 
 	#if LOGGING == true
-	printf("%lld: [receive_segment] from_node: %d treshold: %d window_size: %d numOutSeg: %d numSentSegments: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
+	printf("%lld: [receive_segment] from_node: %d threshold: %d window_size: %d numOutSeg: %d numSentSegments: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
 	#endif
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -445,7 +445,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			con->windowSize /= 2;
 		}
 		#if LOGGING == true
-		printf("%lld: [Reno_3_dup_ack] to_node: %d treshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+		printf("%lld: [Reno_3_dup_ack] to_node: %d threshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
 		#endif
 
 		//perform fast retransmit
@@ -497,7 +497,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		SEGMENT *seg = outSeg->seg;
 		size_t endOffset = outSeg->offset + (outSeg->size - sizeof(seg->header));
 		endOffset %= MAX_SEGMENT_OFFSET;
-		assert(acknowledged(outSeg->offset - 1, header.ackOffset));
+		assert(acknowledged(outSeg->offset, header.ackOffset));
 
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
@@ -519,7 +519,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 			/* Congestion control */
 			if (con->windowSize < con->threshold) { // slow start
-				con->windowSize *= 2;
+				con->windowSize = MIN(2 * con->windowSize, MAX_WINDOW_SIZE);
 			} else if (con->windowSize < MAX_WINDOW_SIZE) { // congestion avoidance
 				con->windowSize++;
 			}
