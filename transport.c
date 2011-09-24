@@ -17,7 +17,6 @@
 #include "datatypes.h"
 #include "network.h"
 #include "transport.h"
-#include "bitmap.h"
 #include "buffer.h"
 #include "dring.h"
 
@@ -91,7 +90,7 @@ typedef struct
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
 	size_t threshold;				// When to stop the slow start phase
-	size_t windowLimit			// Maximal size of window
+	size_t windowLimit;			// Maximal size of window
 	size_t nextOffset;      // The next offset the connection will send if the window moves. Initially it is 0.
 
 	CnetAddr addr;          // Address of the connected node
@@ -120,8 +119,8 @@ typedef struct
 
 /**
  * Stores the connections a host holds.
- * A new entry is added whenever message from/to previously unknown host
- * arrives.
+ * A new entry is added whenever message from/to previously unknown host arrives.
+ * 
  * host address -> CONNECTION
  */
 HASHTABLE connections;
@@ -226,7 +225,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 		con->estimatedRTT = sampleRTT;
 	}
 	#if LOGGING == true
-		printf("%lld: [update_rtt] to_node: %d sampleRTT: %d new_estRTT: %d new_dev: %d timeout: %d\n\n", nodeinfo.time_in_usec, con->addr, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
+		printf("%lld: [update_rtt] to_node: %d sampleRTT: %d new_estRTT: %d new_dev: %d timeout: %d\n",
+					 nodeinfo.time_in_usec, con->addr, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
 	#endif
 }
 
@@ -317,7 +317,10 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 
 	if (winSeg == NULL || acknowledged(outSeg->offset, winSeg->offset)) {
 		#if LOGGING == true
-		printf("%lld: [transmit_segment] to_node: %d threshold: %d window_size: %d numOutSeg: %d numSentSegments %d\n", nodeinfo.time_in_usec, outSeg->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
+		printf("%lld: [transmit_segment] to_node: %d threshold: %d \
+						window_size: %d numOutSeg: %d numSentSegments %d\n",
+						nodeinfo.time_in_usec, outSeg->addr, con->threshold,
+						con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
 		#endif
 
 		outSeg->timesSend++;
@@ -438,7 +441,10 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	CONNECTION *con = get_connection(addr);
 
 	#if LOGGING == true
-	printf("%lld: [receive_segment] from_node: %d threshold: %d window_size: %d numOutSeg: %d numSentSegments: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
+	printf("%lld: [receive_segment] from_node: %d threshold: %d \
+					window_size: %d numOutSeg: %d numSentSegments: %d\n",
+					nodeinfo.time_in_usec, addr, con->threshold, con->windowSize,
+					vector_nitems(con->outSegments), con->numSentSegments);
 	#endif
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -468,7 +474,8 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			con->windowSize = con->threshold;
 		}
 		#if LOGGING == true
-		printf("%lld: [Reno_3_dup_ack] to_node: %d threshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+		printf("%lld: [Reno_3_dup_ack] to_node: %d threshold: %d window_size: %d numOutSeg: %d\n",
+					 nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
 		#endif
 
 		//perform fast retransmit
@@ -477,8 +484,6 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 			if(outSeg->timerId != -1){
 				CHECK(CNET_stop_timer(outSeg->timerId));
-			} else {
-				fprintf(stderr, "found segment with invalid timer id to address %d at node %d", outSeg->addr, nodeinfo.address);
 			}
 			transmit_segment(outSeg);
 		}
