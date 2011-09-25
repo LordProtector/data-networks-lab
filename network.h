@@ -15,5 +15,6 @@ void network_init();
 
 int network_lookup(CnetAddr);
 CnetAddr network_get_address();
+int network_get_bandwidth(CnetAddr addr);
 
 #endif

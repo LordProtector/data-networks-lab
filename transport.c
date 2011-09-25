@@ -30,7 +30,7 @@
  * Maximal number of segments in storage and under transmission.
  */
 //15 also a good value
-#define MAX_WINDOW_SIZE 1
+#define MAX_WINDOW_SIZE 32
 
 /**
  * Maximal offset of the window in byte.
@@ -127,6 +127,24 @@ HASHTABLE connections;
 
 CONNECTION* get_connection(CnetAddr addr);
 CnetTime get_timeout(CONNECTION *con);
+
+/**
+ * Updates window limit for the given connection
+ * dependent on the number of open connections and the connection's bandwidth.
+ * 
+ * @param con The connection for which the window limit should be updated.
+ */
+void update_window_limit(CONNECTION *con)
+{
+	int maxWindow = MAX_WINDOW_SIZE;
+	
+	con->windowLimit = ((maxWindow - hashtable_nitems(connections))
+											* network_get_bandwidth(con->addr)) / 10000000;
+	con->windowLimit = MIN(con->windowLimit, maxWindow);  // limit windowLimit
+	con->windowLimit = MAX(con->windowLimit, 1);					// ensure window limit is >0
+	
+	printf("update window limit to %u\n", con->windowLimit);
+}
 
 /**
  * Creates a new connection for the given address. A connection contains
@@ -401,6 +419,7 @@ void transmit_segments(CnetAddr addr)
 void transport_transmit(CnetAddr addr, char *data, size_t size)
 {
 	CONNECTION *con = get_connection(addr);
+	update_window_limit(con);
 
 	size_t remainingBytes = size;
 	size_t processedBytes = 0;
@@ -571,9 +590,9 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 			/* Congestion control */
 			if (con->windowSize < con->threshold) { // slow start
-				con->windowSize = MIN(2 * con->windowSize, MAX_WINDOW_SIZE);
+				con->windowSize = MIN(2 * con->windowSize, con->windowLimit);
 			} 
-			else if (con->windowSize < MAX_WINDOW_SIZE) { // congestion avoidance
+			else if (con->windowSize < con->windowLimit) { // congestion avoidance
 				con->windowSize++;
 			}
 		}
