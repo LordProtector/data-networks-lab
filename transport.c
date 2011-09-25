@@ -155,8 +155,6 @@ void update_window_limit(CONNECTION *con)
 											* network_get_bandwidth(con->addr)) / 10000000;
 	con->windowLimit = MIN(con->windowLimit, maxWindow);  // limit windowLimit
 	con->windowLimit = MAX(con->windowLimit, 1);          // ensure window limit is >0
-	
-	printf("update window limit to %u\n", con->windowLimit);
 }
 
 

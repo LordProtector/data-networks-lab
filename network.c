@@ -108,7 +108,9 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
 void network_transmit(CnetAddr addr, char *data, size_t size)
 {
 	int link = network_lookup(addr);
-	transmit_datagram(link, false, addr, data, size);
+	if (link > -1) {
+		transmit_datagram(link, false, addr, data, size);
+	}
 }
 
 
@@ -173,7 +175,8 @@ int network_lookup(CnetAddr addr)
 {
 	char key[5];
 	int2string(key, addr);
-	return *((int *) hashtable_find(forwarding_table, key, NULL));
+	int *link = hashtable_find(forwarding_table, key, NULL);
+	return (link != NULL) ? *link : -1;
 }
 
 
