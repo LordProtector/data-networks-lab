@@ -66,7 +66,8 @@
 #define ACK_TIME 10000
 
 /**
- * If true, newly created segments are transmitted asynchronously.
+ * If true, newly created segments are transmitted asynchronously,
+ * to not overwhelm the lower layers.
  */
 #define USE_GEARING true
 
@@ -246,6 +247,9 @@ bool acknowledged(size_t offset, size_t ackOffset)
  * of the given connection with the given sampleRTT.
  * The calculation to estimate the RTT is based on
  * exponential weighted moving average.
+ * 
+ * @param con The connection for that RTT should be updated.
+ * @param sampleRTT New measured RTT.
  */
 void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 {
@@ -267,6 +271,9 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 
 /**
  * Returns and proper timeout value for the given connection.
+ * 
+ * @param con The connection, the timeout should be computed for.
+ * @return An adequate timeout for the connection.
  */
 CnetTime get_timeout(CONNECTION *con)
 {
@@ -410,7 +417,7 @@ void transmit_segments(CnetAddr addr)
 	CONNECTION *con = get_connection(addr);
 	int timeout = 1;
 
-	//window not saturated and segments available
+	/* window not saturated and segments available */
 	for (int i = 0; i < con->windowSize && i < vector_nitems(con->outSegments); i++) {
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, i, NULL);
 		if (outSeg->timerId == -1) {
@@ -472,11 +479,11 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 		outSeg.timerId = -1;
 		outSeg.offset = header.offset;
 
-		//add created segment to vector of sendable segments
+		/* add created segment to vector of sendable segments */
 		vector_append(con->outSegments, &outSeg, sizeof(outSeg));
 	}
 
-	//stop the application if list of outsegments exceeds threshold
+	/* stop the application if list of outsegments exceeds threshold */
 	if (vector_nitems(con->outSegments) >= con->windowSize) {
 		#if LOGGING == true
 			printf("%lld: [disable_application_window_saturated] to_node: %d\n", nodeinfo.time_in_usec, addr);

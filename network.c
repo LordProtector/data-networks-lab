@@ -248,7 +248,6 @@ int get_weight(int link);
 void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
 {
 	outSeg->rSeg->header.ack_num = neighbours[outSeg->link].nextAckNum;
-	//printf("transmit_routing_segment seq_num: %d ack_num: %d\n\n", outSeg->rSeg->header.seq_num, outSeg->rSeg->header.ack_num);
 	transmit_datagram(outSeg->link, true, 0, (char *)outSeg->rSeg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
 }
