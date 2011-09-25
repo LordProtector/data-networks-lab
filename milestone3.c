@@ -6,7 +6,7 @@
  * Implementation of milstone 3 of the data networks lab 2011
  */
 
-#define LOGGING true
+#define LOGGING false
 
 #define LOAD_OUTPUT false
 
@@ -64,7 +64,6 @@ static EVENT_HANDLER(physical_ready)
 
   length = sizeof(msg);
   CHECK(CNET_read_physical(&link, msg, &length));
-  //~ printf("\t\t\t\tDATA received: %d bytes\n", length);
   link_receive(link, msg, length);
 }
 

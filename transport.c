@@ -6,7 +6,7 @@
  * Implementation of the transport layer.
  * 
  * The transport layer segments messages and streams them to the receiver.
- * It implements reliable data transfer using cumulative acknowledgements
+ * It implements reliable data transfer using cumulative acknowledgments
  * and resending of unacknowledged segments.
  * 
  * For flow control a sliding window of maximal sendable segments is 
@@ -62,7 +62,7 @@
 #define TRANSPORT_BUFFER_SIZE MAX_SEGMENT_OFFSET
 
 /**
- * Minimum time before we send another ack
+ * Minimum time before we send another ACK.
  */
 #define ACK_TIME 10000
 
@@ -107,7 +107,7 @@ typedef struct
 	CnetTime estimatedRTT;  // Estimated round time trip (RTT).
 	CnetTime deviation;	    // Safety margin for the variation in estimatedRTT.
 	CnetTime lastSendAck;   // Time the last acknowledgment was transmitted
-	int ackCounter;	        // Congestion control: counts duplicated acks
+	int ackCounter;	        // Congestion control: counts duplicated ACKs
 	size_t lastAckOffset;   // Congestion control: stores the last ACK received
 } CONNECTION;
 
@@ -442,7 +442,7 @@ void transmit_segments(CnetAddr addr)
  * Finally it triggers the sending of segments.
  *
  * @param addr Address to send the message to.
- * @param data Data to send to address 'addr'
+ * @param data Data to send to address 'addr'.
  * @param size Size of the message.
  */
 void transport_transmit(CnetAddr addr, char *data, size_t size)
@@ -639,7 +639,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	}
 
 	#if EXPLICIT_ACK == true
-	/* In case piggybacking ack is not possible, send it directly */
+	/* In case piggybacking ACK is not possible, send it directly */
 	if (payloadSize != 0 && numSentSegments == con->numSentSegments && 
 			nodeinfo.time_in_usec - con->lastSendAck > ACK_TIME)
 	{

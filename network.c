@@ -37,7 +37,7 @@
 #define HOP_LIMIT 32
 
 /**
- * An entry of the routing table
+ * An entry of the routing table.
  */
 typedef struct {
 	int weight;			// weight to reach destination
@@ -73,11 +73,11 @@ HASHTABLE routing_table;
  * Takes a segment, adds datagram header and passes datagram
  * to the link layer.
  * 
- * @param link    link to send the segment on
- * @param routing segment contains routing data
- * @param addr    destination address
- * @param data    segment to send
- * @param size    size of segment
+ * @param link    Link to send the segment on.
+ * @param routing Segment contains routing data.
+ * @param addr    Destination address.
+ * @param data    Segment to send.
+ * @param size    Size of segment.
  */
 void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t size)
 {
@@ -101,9 +101,9 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
 /**
  * Takes a segment and delivers it to addr.
  * 
- * @param addr destination address
- * @param data segment to send
- * @param size size of segment
+ * @param addr Destination address.
+ * @param data Segment to send.
+ * @param size Size of segment.
  */
 void network_transmit(CnetAddr addr, char *data, size_t size)
 {
@@ -194,7 +194,7 @@ CnetAddr network_get_address()
 /**
  * Returns minimum bandwidth on route to addr.
  * 
- * @param addr The destination address
+ * @param addr The destination address.
  * @return Minimum bandwidth on route to addr.
  */
 int network_get_bandwidth(CnetAddr addr)
@@ -304,9 +304,9 @@ void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 
 
 /**
- * Acknowledges received distance info
+ * Acknowledges received distance info.
  *
- * @param link Link to send the acknowledgement on.
+ * @param link Link to send the acknowledgment on.
  */
 void transmit_distance_ack(int link)
 {
@@ -324,7 +324,7 @@ void transmit_distance_ack(int link)
  * Receive a routing segment.
  *
  * Reads the routing information from the routing segment,
- * changes the routing table accordingly and potentially broadcasts
+ * changes the routing table accordingly and potentially broadcasts,
  * changes in forwarding decisions.
  * Drops all out of order routing segments (relies on ordered resend).
  * 
@@ -449,10 +449,10 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 
 
 /**
- * Updates an entry in the forwarding table
+ * Updates an entry in the forwarding table.
  * 
- * @param destAddr destination address (key of entry to get changed)
- * @param nextHop next hop in path to destination
+ * @param destAddr destination address (key of entry to get changed).
+ * @param nextHop next hop in path to destination.
  */
 void update_forwarding_table(CnetAddr destAddr, int nextHop)
 {
