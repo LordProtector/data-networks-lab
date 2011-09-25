@@ -16,7 +16,8 @@
  * If a frame is received fully without errors it is handed over to the upper
  * layer. Corrupted frames are dropped.
  *
- * //TODO Error correction could be implemented here.
+ * Error correction could be implemented here, but is actually not done,
+ * because it causes more overhead than it can avoid.
  */
 
 /* include headers */
@@ -311,6 +312,11 @@ void transmit_frame(int link)
  */
 void link_transmit(int link, char *data, size_t size)
 {
+	/* avoid unlimited increase of output queue */
+  if (queue_nitems(linkData[link].queue) >= 10000) {
+    return;
+  }
+
   link_get_load(link);
   FRAME frame;
   frame_header header;
