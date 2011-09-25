@@ -16,7 +16,8 @@
  * If a frame is received fully without errors it is handed over to the upper
  * layer. Corrupted frames are dropped.
  *
- * //TODO Error correction could be implemented here.
+ * Error correction could be implemented here, but is actually not done,
+ * because it causes more overhead than it can avoid.
  */
 
 /* include headers */
@@ -101,8 +102,8 @@ typedef struct link_t
   uint8_t  ordering;            // expected ordering of next received frame
   char     buffer[BUFFER_SIZE]; // input buffer
   size_t   size;                // how far the buffer is filled
-  CnetTime busyTime;						// number of microseconds this link is busy
-  CnetTime lastStatusChange;		// time busy status changed the last time
+  CnetTime busyTime;            // number of microseconds this link is busy
+  CnetTime lastStatusChange;    // time busy status changed the last time
   size_t   sendBits;            // how many bits are send during the interval
   QUEUE    frameSizeCounter;    // stores the last sizes of frames being send
 } link_t;
@@ -141,11 +142,13 @@ void add_load(int link, size_t size);
  */
 size_t encode_payload(FRAME *frame, char *payload, size_t size)
 {
-  //FIXME dummy function
+  //This is the appropiate place to implement an error correction scheme.
+  //We decided not to implement error correction for performance reasons.
   memcpy(frame->payload, payload, size);
 
   return size;
 }
+
 
 /**
  * Decodes payload from frame.
@@ -158,11 +161,12 @@ size_t encode_payload(FRAME *frame, char *payload, size_t size)
  */
 size_t decode_payload(FRAME *frame, char *payload, size_t size)
 {
-  //FIXME dummy function
+  //We decided not to implement error correction for performance reasons.
   memcpy(payload, frame->payload, size);
 
   return size;
 }
+
 
 /**
  * Marshals frame for efficient transmission and encodes the payload for
@@ -185,11 +189,11 @@ size_t marshal_frame(FRAME *frame, frame_header *header, char* payload, size_t s
   if (header->isLast) {
     frame->header.id_isLast |= IS_LAST;
   }
-	//TODO: compute checksum on header only, if error correction is implemented
   frame->header.checksum = CNET_crc16((buf_t) frame, frameSize);
 
   return frameSize;
 }
+
 
 /**
  * Unmarshals frame.
@@ -216,6 +220,7 @@ size_t unmarshal_frame(FRAME *frame, frame_header *header, char *payload, size_t
   }
 }
 
+
 /**
  * Returns the transmission delay.
  *
@@ -233,6 +238,7 @@ double transmission_delay(size_t length, int link)
 
   return transmission_delay;
 }
+
 
 /**
  * Writes a message on a physical link if possible.
@@ -306,9 +312,10 @@ void transmit_frame(int link)
  */
 void link_transmit(int link, char *data, size_t size)
 {
-  //if (queue_nitems(linkData[link].queue) >= 1000 && size < 10) {
-    //return;
-  //}
+	/* avoid unlimited increase of output queue */
+  if (queue_nitems(linkData[link].queue) >= 10000) {
+    return;
+  }
 
   link_get_load(link);
   FRAME frame;
@@ -406,6 +413,7 @@ void link_receive(int link, char *data, size_t size)
   }
 }
 
+
 /**
  * Removes old data from the queue of the frameSizeCounter which are older
  * than the limit in INTERVALL_CALCULATE_LOAD.
@@ -434,6 +442,7 @@ void remove_load(int link)
 		}
 	}
 }
+
 
 /**
  * Adds load to the load queue. Should be called if data are transmitted over
@@ -472,6 +481,7 @@ float link_get_load(int link)
  
 }
 
+
 /**
  * Returns the bandwidth for the given link.
  *  @param link Link to get the bandwidth for.
@@ -482,6 +492,7 @@ int link_get_bandwidth(int link)
 	return linkinfo[link].bandwidth;
 }
 
+
 /**
  * Returns the MTU for the given link.
  * @param link Link to get the MTU for.
@@ -491,6 +502,7 @@ int link_get_mtu(int link)
 	assert(link <= nodeinfo.nlinks);
 	return linkinfo[link].mtu;
 }
+
 
 /**
  * Returns the number of pending frames
@@ -511,6 +523,7 @@ int link_num_links()
 {
 	return nodeinfo.nlinks;
 }
+
 
 /**
  * Initializes the link layer.

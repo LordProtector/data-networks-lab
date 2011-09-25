@@ -15,13 +15,6 @@ The goal of this project is to transfer textfiles as sequence of characters thro
 
 Beside the two layers, physical and application layer, Cnet provides we implement three additional layers between them. We call them \emph{link layer}, \emph{network layer}, and \emph{transport layer}, from bottom to top. Data packets in the link layer are called \emph{frame}, in the network layer \emph{datagram} and in the transport layer \emph{segment}. To data packets from the application layer we refer to as \emph{messages}. Figure~\ref{fig:overview-layers} gives an overview how the different layers call each other.
 
-\begin{figure}
-  \centering
-  \includegraphics[width=0.9\textwidth]{images/flowgraph_overview.pdf}
-  \caption[Overview Layers]{\hcaption{Overview Layers.} Overview of the call hierarchy of the different layers.}
-  \label{fig:overview-layers}
-\end{figure}
-
 
 \subsection{Link Layer}
   The link layer provides basic "point2point" connections between neighboring nodes. 
@@ -29,15 +22,17 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   \subsubsection{Framementation}
   It can handle the transmission of arbitrary large packets (limited by the buffer size, which is large enough to handle all messages in this scenario) independently of the MTU of the link because it has the ability of fra(g)mentation. This means that data from the upper layer is split into several frames, which fit to the MTU minus the additional header information, and put together on the receiver side. Figure~\ref{fig:receiver-side-link-layer} illustrates the receiver side of the link layer. The ordering of the frames is checked by sequence numbers and identification numbers (ID). We use an additional \emph{isLast} flag to identify when a datagram ends. This mechanism is guarded by the fact that no reordering of frames on one link occur. 
 
-  \subsubsection{Corruption Detection}
-  This layer also guarantees that all datagrams which are handed to the upper layer are \emph{free of corruption}. Corrupt frames are recognized by computing a checksum and all frames with errors are dropped. \ifthenelse{\boolean{m2}}{We will inspect if it is efficient to implement error correction in this layer.}{We dropped the idea of implementing error correction due to the low rate of corruption.} Finally, the data in this layer are handed to the physical layer in a first come first serve fairness. 
-
-\begin{figure}
+  \begin{figure}[h]
   \centering
-  \includegraphics[width=0.9\textwidth]{images/flowgraph_link_layer_receiver.pdf}
+  \includegraphics[scale=0.6]{images/flowgraph_link_layer_receiver.pdf}
   \caption[Receiver side of link layer]{\hcaption{Receiver side of link layer.} The flow graph shows how data on the receiver side of the link layer are handled.}
   \label{fig:receiver-side-link-layer}
 \end{figure}
+
+  \subsubsection{Corruption Detection}
+  This layer also guarantees that all datagrams which are handed to the upper layer are \emph{free of corruption}. Corrupt frames are recognized by computing a checksum and all frames with errors are dropped. \ifthenelse{\boolean{m2}}{We will inspect if it is efficient to implement error correction in this layer.}{We dropped the idea of implementing error correction due to the low rate of corruption.} Finally, the data in this layer are handed to the physical layer in a first come first serve fairness. 
+
+\newpage
 
 \subsection{Network Layer}
 
@@ -48,7 +43,7 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
 
   Whenever a node $i$ receives the routing information that one of his neighbors $j$ can route to an specific destination host $z$ over a path of length $n$ with costs $c$, it concludes that itself could reach that host $z$ over a path of length $n+1$ with costs $c+c(i,j)$ using $j$ as the first hop. Note that $c(i,j)$ is $i$'s cost to reach $j$. The routing table contains information about the costs to reach any node using any of the direct neighbors as next hop. If a routing table update results in a change of the path with the lowest costs, a node broadcasts its new cost to route over that path to all direct neighbors. Thus the routes with minimal costs are propagated through the network.
 
-  As cost or weight function $c(i,j)$ we use the reciprocal of the link bandwidth between node $i$ and node $j$. \fixme{and some more infos, lets see what will be our final decision.}
+  As cost or weight function $c(i,j)$ we use the reciprocal of the link bandwidth between node $i$ and node $j$.
 
   Note, that routing information are send in a reliable fashion (using acknowledgments). This ensures that the algorithm terminates with low cost routes for every node.
 
@@ -58,11 +53,14 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   If a datagram arrives at a node, the network layer checks whether this node is indeed the final destination of the datagram. If so the datagram header gets removed and the payload is handed to the transport layer. Otherwise, the datagram is forwarded to the next hop of the path with the minimal costs, according to the forwarding table. On each hop a datagram passes, the hop counter is decreased to avoid that a datagram travels too long in the network.
 
 
-
-
-
 \subsection{Transport Layer}
   The main task of the transport layer is to provide reliable data transfer and congestion control.
+
+  \subsubsection{Segmentation}
+  Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames have reached previously without errors. If the segments are smaller, the traffic becomes lower.
+
+  \subsubsection{Gearing}
+  To avoid that to be forwarded messages from other nodes are too much delayed, the transport layer hands newly created segments asynchronously to the lower layers. So other messages can be ordered between them in the link queue.
 
   \subsubsection{Reliable Data Transfer}
   Reliable data transfer means that all messages send on the network will be correctly delivered in order to the application layer of the receiver. To provide this service, the transport layer uses cumulative acknowledgements, sequence numbers in form of offsets and an isLast flag to identify the end of a message. The transport layer has the notion of a connection for all communication partners, i.e. in Cnet that means all other nodes in the system.
@@ -71,14 +69,19 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   
   Increasing the sequence numbers without a limit is not possible because headers would become larger in size or we would get integer overflows. To control the sequence numbers we use cyclic sequence numbers and also cyclic buffers. The only constraint is that we need more than twice as many sequence numbers as the window is large, to detect the correct order of the sequence numbers.
   
-  The calculation of the timeouts is based on the round-trip time (RTT). This is estimated on the basis of exponential weighted moving average of sample RTTs with the suggested values and computation of RFC 2988.
+  The calculation of the timeouts is based on the round-trip time (RTT). This is estimated on the basis of exponential weighted moving average of sample RTTs, using the suggested values and computation of RFC 2988.
   
   \subsubsection{Congestion Control}
-  Additionally this layer provides congestion control using the Reno algorithm explained in the lecture using a slow start and congestion avoidance phase with additive increase and multiplicative decrease as well as the fast recovery phase for three duplicated ACKs.
-  
-  \subsubsection{Segmentation}
-  Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames have reached previously without errors. If the segments are smaller, the traffic becomes lower.
+  Additionally this layer provides congestion control using the Reno algorithm explained in the lecture using a slow start and congestion avoidance phase with additive increase and multiplicative decrease as well as the fast recovery phase for three duplicated ACKs. We found out, that high window sizes result in a weaker performance, thus we choke the growing window at a maximal window size, that depends on the number of open connections.
 
+  \begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{images/flowgraph_overview.pdf}
+    \caption[Overview Layers]{\hcaption{Overview Layers.} Overview of the call hierarchy of the different layers.}
+    \label{fig:overview-layers}
+  \end{figure}
+
+  \newpage
 
 \section{Results}
 \ifthenelse{\boolean{m2}}{% text for milestone 2
@@ -105,7 +108,30 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   \end{figure}
 
 }{% text for milestone 3
-  \fixme{Analysis of milestone 3.}
+
+  Our analysis shows that throughput and latency stays constant after a short period of time and the number of send / received messages increases linearly as assumed. Figure~\ref{fig:analysis} shows the behavior of the \code{saarnet3a.txt} network for a simulation period of 10 min. The fluctuations at the beginning are due to the not filled queues after initialization and the routing algorithm.
+
+  With our implementation we reach a throughput from Saarbrücken to Saarlouis of 106,0 kB/s and 7,5 kB/s the other way around. The poor throughputs of the other connections are due to the low message rate of the sending nodes. The latencies in this scenario converge to values around 50 ms, 700 ms and 1000 ms, depending on the link properties on the chosen route.
+  
+  \begin{figure}[h]
+   \centering
+   \subfigure[Throughput]{
+    \label{fig:peptide1}
+    \includegraphics[width=0.48\textwidth]{images/milestone3/saarnet3a-throughput.png}
+   }
+   \subfigure[Latency]{
+    \label{fig:peptide2}
+    \includegraphics[width=0.48\textwidth]{images/milestone3/saarnet3a-latency.png}
+   }
+   \subfigure[Messages]{
+    \label{fig:peptide3}
+    \includegraphics[width=0.48\textwidth]{images/milestone3/saarnet3a-messages.png}
+   }
+
+   \caption[Analysis of milestone 3]{\hcaption{Analysis of milestone 3.} The plots show the behavior for a 10 min simulation of \code{saarnet3a.txt}.}
+   
+   \label{fig:analysis}
+  \end{figure}
 }
 
 \end{document}

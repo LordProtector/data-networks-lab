@@ -34,6 +34,7 @@ void int2string(char* s, int i)
 	sprintf(s, "%d", i);
 }
 
+
 /**
  * aplication_ready() event-handler.
  *
@@ -48,6 +49,7 @@ static EVENT_HANDLER(application_ready)
   CHECK(CNET_read_application(&destaddr, msg, &length));
   transport_transmit(destaddr, msg, length);
 }
+
 
 /**
  * physical_ready() event-handler.
@@ -66,6 +68,7 @@ static EVENT_HANDLER(physical_ready)
   link_receive(link, msg, length);
 }
 
+
 /**
  * link_ready() event-handler.
  *
@@ -77,6 +80,7 @@ static EVENT_HANDLER(link_ready)
 {
   transmit_frame(data); // data = link (to send over)
 }
+
 
 /**
  * transport_timeout() event-handler.
@@ -90,6 +94,7 @@ static EVENT_HANDLER(transport_timeout)
   transmit_segment((void *)data); // data = pointer to OUT_SEGMENT
 }
 
+
 /**
  * routing_timeout() event-handler.
  *
@@ -102,11 +107,27 @@ static EVENT_HANDLER(routing_timeout)
   transmit_routing_segment((void *)data); // data = pointer to OUT_ROUTING_SEGMENT
 }
 
+
+/**
+ * gearing_timeout() event-handler.
+ * 
+ * It is called when enough time passed to enable other messages to hand
+ * some of their segments to the outgoing queues of the lower layers.
+ * Now it is our turn to push the next segment down the protocol stack.
+ * 
+ * It calls <code>transmit_segment()</code>.
+ */
 static EVENT_HANDLER(gearing_timeout)
 {
   transmit_segment((void *)data); // data = pointer to OUT_SEGMENT
 }
 
+
+/**
+ * cyclic_output_timeout() event-handler.
+ * 
+ * Used for logging and evaluation purposes.
+ */
 static EVENT_HANDLER(cyclic_output_timeout)
 {
 	#if LOGGING == true
@@ -123,7 +144,6 @@ static EVENT_HANDLER(cyclic_output_timeout)
 	#endif
 	
 }
-
 
 
 /**

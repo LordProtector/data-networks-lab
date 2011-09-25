@@ -13,7 +13,7 @@
  * destination host.
  *
  * The second task is to build the forwarding table.
- * TODO using which algorithm?????
+ * This contains the link numbers with the smallest route weight for each address.
  *
  * For each datagram it is checked if it is "normal" data or a routing packet.
  */
@@ -45,11 +45,13 @@ typedef struct {
 	int minBWD;			// minimal bandwidth on path to destination
 } ROUTING_ENTRY;
 
+
 void int2string(char* s, int i);
 void routing_init();
 void routing_receive(int link, char *data, size_t size);
 ROUTING_ENTRY *routing_lookup(CnetAddr addr);
 void update_forwarding_table(CnetAddr destAddr, int nextHop);
+
 
 /**
  * Stores which route a packet should travel for a given destination.
@@ -70,6 +72,7 @@ HASHTABLE routing_table;
 /**
  * Takes a segment, adds datagram header and passes datagram
  * to the link layer.
+ * 
  * @param link    link to send the segment on
  * @param routing segment contains routing data
  * @param addr    destination address
@@ -94,8 +97,10 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
 	link_transmit(link, (char*) &datagram, datagramSize);
 }
 
+
 /**
  * Takes a segment and delivers it to addr.
+ * 
  * @param addr destination address
  * @param data segment to send
  * @param size size of segment
@@ -103,13 +108,17 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
 void network_transmit(CnetAddr addr, char *data, size_t size)
 {
 	int link = network_lookup(addr);
-	transmit_datagram(link, false, addr, data, size);
+	if (link > -1) {
+		transmit_datagram(link, false, addr, data, size);
+	}
 }
+
 
 /**
  * Takes a datagram and checks its destination.
  * Either unpacks segment from the datagram and hands it to the upper layer
  * or forwards the datagram to the next hop (on the route to its destination).
+ * 
  * @param link Link which received the datagram.
  * @param data The received datagram.
  * @param size Size of the datagram.
@@ -142,6 +151,7 @@ void network_receive(int link, char *data, size_t size)
 	}
 }
 
+
 /**
  * Initializes the network layer.
  *
@@ -154,6 +164,7 @@ void network_init()
 	routing_init();
 }
 
+
 /**
  * Lookup link in forwarding_table and returns the corresponding link.
  *
@@ -162,31 +173,36 @@ void network_init()
  */
 int network_lookup(CnetAddr addr)
 {
-	//~ ROUTING_ENTRY *entry = routing_lookup(addr);
-	//~ assert(entry != NULL);
-	//~ int bestChoice = 0, bestWeight = INT_MAX;
-//~
-	//~ for(int i = 1; i <= link_num_links(); i++) {
-		//~ if(entry[i].weight < bestWeight) {
-			//~ bestChoice = i;
-			//~ bestWeight = entry[i].weight;
-		//~ }
-	//~ }
-	//~ assert(bestWeight != INT_MAX);
-//~
-	//~ return bestChoice;
-
 	char key[5];
 	int2string(key, addr);
-	return *((int *) hashtable_find(forwarding_table, key, NULL));
+	int *link = hashtable_find(forwarding_table, key, NULL);
+	return (link != NULL) ? *link : -1;
 }
+
 
 /**
  * Returns a node's own network address.
+ * 
+ * @return A node's own network address.
  */
 CnetAddr network_get_address()
 {
 	return nodeinfo.address;
+}
+
+
+/**
+ * Returns minimum bandwidth on route to addr.
+ * 
+ * @param addr The destination address
+ * @return Minimum bandwidth on route to addr.
+ */
+int network_get_bandwidth(CnetAddr addr)
+{
+	int link             = network_lookup(addr);
+	ROUTING_ENTRY *entry = routing_lookup(addr);
+	
+	return entry[link].minBWD;
 }
 
 
@@ -204,16 +220,17 @@ typedef struct
 {
 	VECTOR outRoutingSegments;		// Sent routing segements.
 	size_t nextSeqNum;     		    // Sequence number for next routing segment.
-	size_t nextAckNum;				// The next awaited sequence number. Initially it is 0.
+	size_t nextAckNum;						// The next awaited sequence number. Initially it is 0.
 } NEIGHBOUR;
 
 typedef struct
 {
 	CnetTimerID timerId; 			// The ID of the timer to count the timeout.
-	int link;       	 			// The destination link for the routing segment.
+	int link;       	 				// The destination link for the routing segment.
 	size_t size;         			// Size of the out routing segment.
-	ROUTING_SEGMENT *rSeg;			// Pointer to the routing segment.
+	ROUTING_SEGMENT *rSeg;		// Pointer to the routing segment.
 } OUT_ROUTING_SEGMENT;
+
 
 /**
  * All direct neigbours of this node.
@@ -221,19 +238,23 @@ typedef struct
  */
 NEIGHBOUR *neighbours;
 
+
 bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo);
 int get_weight(int link);
 
+
 /**
  * Hands routing segment to the link layer (!) and starts timer.
+ * 
+ * @param outSeg Routing segment to transmit.
  */
 void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
 {
 	outSeg->rSeg->header.ack_num = neighbours[outSeg->link].nextAckNum;
-	//printf("transmit_routing_segment seq_num: %d ack_num: %d\n\n", outSeg->rSeg->header.seq_num, outSeg->rSeg->header.ack_num);
 	transmit_datagram(outSeg->link, true, 0, (char *)outSeg->rSeg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
 }
+
 
 /**
  * Packs distance information and an outgoing link
@@ -265,6 +286,7 @@ void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
 	transmit_routing_segment(outSeg);
 }
 
+
 /**
  * Broadcasts the given distance information to all neigbours.
  *
@@ -279,6 +301,7 @@ void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 		transmit_distance_info(distance_info, size, i);
 	}
 }
+
 
 /**
  * Acknowledges received distance info
@@ -296,6 +319,7 @@ void transmit_distance_ack(int link)
 	transmit_datagram(link, true, 0, (char *)&rSeg, sizeof(routing_header));
 }
 
+
 /**
  * Receive a routing segment.
  *
@@ -303,6 +327,7 @@ void transmit_distance_ack(int link)
  * changes the routing table accordingly and potentially broadcasts
  * changes in forwarding decisions.
  * Drops all out of order routing segments (relies on ordered resend).
+ * 
  * @param link Link which received the routing segment.
  * @param data The received routing segment.
  * @param size Size of the routing segment.
@@ -351,11 +376,13 @@ void routing_receive(int link, char *data, size_t size)
 	}
 }
 
+
 /**
  * Updates the routing table with the given distance information
  * and generates own new routing information to broadcast it to the
  * neighbours if the update led to changes in the forward decision.
  * Returns whether the update led to changes in the forward decision.
+ * 
  * @param link Link that received the incoming distance information.
  * @param inDistInfo Incoming distance information.
  * @param outDistInfo Outgoing distance information.
@@ -364,6 +391,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 {
 	ROUTING_ENTRY *entry = routing_lookup(inDistInfo.destAddr);
 	int bestChoice = 0, bestWeight = INT_MAX;
+	
 	if(NULL == entry) {
 		/* new routing table entry */
 		char key[5];
@@ -390,7 +418,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	assert(NULL != entry);
 
 	/* update routing table */
-	entry[link].weight = inDistInfo.weight + get_weight(link);
+	entry[link].weight = 2 * inDistInfo.weight + get_weight(link);
 	entry[link].minMTU = MIN(inDistInfo.minMTU, link_get_mtu(link));
 	entry[link].minBWD = MIN(inDistInfo.minBWD, link_get_bandwidth(link));
 
@@ -409,17 +437,20 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	/* enable message delivery to that node */
 	CNET_enable_application(inDistInfo.destAddr);
 
-// 	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
-// 	for(int i = 1; i <= link_num_links(); i++) {
-// 		printf("weight %d minBWD: %d ", entry[i].weight, entry[i].minBWD);
-// 	}
-// 	puts("");puts("");
+	/* Logging */
+	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
+	for(int i = 1; i <= link_num_links(); i++) {
+		printf("\t(weight %d minBWD: %d)\t", entry[i].weight, entry[i].minBWD);
+	}
+	puts("");
 
 	return bestChoiceChanged;
 }
 
+
 /**
  * Updates an entry in the forwarding table
+ * 
  * @param destAddr destination address (key of entry to get changed)
  * @param nextHop next hop in path to destination
  */
@@ -434,6 +465,7 @@ void update_forwarding_table(CnetAddr destAddr, int nextHop)
 
 /**
  * Looks up an address in the routing table.
+ * 
  * @param addr Address to look up.
  */
 ROUTING_ENTRY *routing_lookup(CnetAddr addr)
@@ -451,13 +483,8 @@ ROUTING_ENTRY *routing_lookup(CnetAddr addr)
  */
 int get_weight(int link)
 {
-	//return 10000000 * 1.0 / link_get_bandwidth(link);
-	double base = (100000. / link_get_bandwidth(link) - 5.);
-	double weight = 10. * (-0.04 * (base * base * base) + 6.);
-
-	return weight;
+	return 10000000. / link_get_bandwidth(link);
 }
-
 
 
 /**
