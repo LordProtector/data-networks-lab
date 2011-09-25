@@ -15,7 +15,6 @@
  * largest element of the first queue is larger than the window size.
  */
 
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -27,9 +26,9 @@
  */
 typedef struct _DRING
 {
-	SQUEUE s; // queue with the "smaller" elements
-	SQUEUE l; // queue with the "larger" elements
-	int windowSize; // size of the window
+	SQUEUE s;         // queue with the "smaller" elements
+	SQUEUE l;         // queue with the "larger" elements
+	int windowSize;   // size of the window
 	int maxFirstRing; // greatest element in s
 } _DRING;
 
@@ -64,6 +63,7 @@ void dring_free(DRING d)
 	free(dring);
 }
 
+
 /**
  * Insert an element in the double ring.
  * The data is inserted in the ring with the smallest distance to the existing data.
@@ -76,7 +76,6 @@ void dring_insert(DRING d, int data)
 {
 	_DRING *dring = (_DRING *)d;
 
-	//~ assert(data < dring->windowSize*2);
 	if(dring->maxFirstRing == -1 || data > dring->maxFirstRing ||
 		 abs(data - dring->maxFirstRing) < dring->windowSize) {
 		squeue_insert(dring->s, data);
@@ -86,6 +85,7 @@ void dring_insert(DRING d, int data)
 		squeue_insert(dring->l, data);
 	}
 }
+
 
 /**
  * Returns (but keeps) the "smallest" value of the double ring.
@@ -108,6 +108,7 @@ int dring_peek(DRING d)
 		return -1;
 	}
 }
+
 
 /**
  * Returns the "smallest" element from the double ring.

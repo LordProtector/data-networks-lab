@@ -13,7 +13,6 @@
  * destination host.
  *
  * The second task is to build the forwarding table.
- * TODO using which algorithm?????
  *
  * For each datagram it is checked if it is "normal" data or a routing packet.
  */
@@ -45,11 +44,13 @@ typedef struct {
 	int minBWD;			// minimal bandwidth on path to destination
 } ROUTING_ENTRY;
 
+
 void int2string(char* s, int i);
 void routing_init();
 void routing_receive(int link, char *data, size_t size);
 ROUTING_ENTRY *routing_lookup(CnetAddr addr);
 void update_forwarding_table(CnetAddr destAddr, int nextHop);
+
 
 /**
  * Stores which route a packet should travel for a given destination.
@@ -95,6 +96,7 @@ void transmit_datagram(int link, bool routing, CnetAddr addr, char *data, size_t
 	link_transmit(link, (char*) &datagram, datagramSize);
 }
 
+
 /**
  * Takes a segment and delivers it to addr.
  * 
@@ -107,6 +109,7 @@ void network_transmit(CnetAddr addr, char *data, size_t size)
 	int link = network_lookup(addr);
 	transmit_datagram(link, false, addr, data, size);
 }
+
 
 /**
  * Takes a datagram and checks its destination.
@@ -145,6 +148,7 @@ void network_receive(int link, char *data, size_t size)
 	}
 }
 
+
 /**
  * Initializes the network layer.
  *
@@ -156,6 +160,7 @@ void network_init()
 
 	routing_init();
 }
+
 
 /**
  * Lookup link in forwarding_table and returns the corresponding link.
@@ -170,6 +175,7 @@ int network_lookup(CnetAddr addr)
 	return *((int *) hashtable_find(forwarding_table, key, NULL));
 }
 
+
 /**
  * Returns a node's own network address.
  * 
@@ -179,6 +185,7 @@ CnetAddr network_get_address()
 {
 	return nodeinfo.address;
 }
+
 
 /**
  * Returns minimum bandwidth on route to addr.
@@ -220,17 +227,22 @@ typedef struct
 	ROUTING_SEGMENT *rSeg;		// Pointer to the routing segment.
 } OUT_ROUTING_SEGMENT;
 
+
 /**
  * All direct neigbours of this node.
  * For simplicity neighbours[0], refers to this node (just ignore it!).
  */
 NEIGHBOUR *neighbours;
 
+
 bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *outDistInfo);
 int get_weight(int link);
 
+
 /**
  * Hands routing segment to the link layer (!) and starts timer.
+ * 
+ * @param outSeg Routing segment to transmit.
  */
 void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
 {
@@ -239,6 +251,7 @@ void transmit_routing_segment(OUT_ROUTING_SEGMENT *outSeg)
 	transmit_datagram(outSeg->link, true, 0, (char *)outSeg->rSeg, outSeg->size);
 	outSeg->timerId = CNET_start_timer(ROUTING_TIMER, ROUTING_TIMEOUT, (CnetData) outSeg);
 }
+
 
 /**
  * Packs distance information and an outgoing link
@@ -270,6 +283,7 @@ void transmit_distance_info(DISTANCE_INFO *distance_info, size_t size, int link)
 	transmit_routing_segment(outSeg);
 }
 
+
 /**
  * Broadcasts the given distance information to all neigbours.
  *
@@ -284,6 +298,7 @@ void broadcast_distance_info(DISTANCE_INFO *distance_info, size_t size)
 		transmit_distance_info(distance_info, size, i);
 	}
 }
+
 
 /**
  * Acknowledges received distance info
@@ -300,6 +315,7 @@ void transmit_distance_ack(int link)
 
 	transmit_datagram(link, true, 0, (char *)&rSeg, sizeof(routing_header));
 }
+
 
 /**
  * Receive a routing segment.
@@ -356,6 +372,7 @@ void routing_receive(int link, char *data, size_t size)
 		transmit_distance_ack(link);
 	}
 }
+
 
 /**
  * Updates the routing table with the given distance information
@@ -426,6 +443,7 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	return bestChoiceChanged;
 }
 
+
 /**
  * Updates an entry in the forwarding table
  * 
@@ -463,7 +481,6 @@ int get_weight(int link)
 {
 	return 10000000. / link_get_bandwidth(link);
 }
-
 
 
 /**

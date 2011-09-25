@@ -66,7 +66,7 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   The calculation of the timeouts is based on the round-trip time (RTT). This is estimated on the basis of exponential weighted moving average of sample RTTs with the suggested values and computation of RFC 2988.
   
   \subsubsection{Congestion Control}
-  Additionally this layer provides congestion control using the Reno algorithm explained in the lecture using a slow start and congestion avoidance phase with additive increase and multiplicative decrease as well as the fast recovery phase for three duplicated ACKs.
+  Additionally this layer provides congestion control using the Reno algorithm explained in the lecture using a slow start and congestion avoidance phase with additive increase and multiplicative decrease as well as the fast recovery phase for three duplicated ACKs. We found out, that high window sizes result in a weaker performance, thus we choke the growing window at a maximal window size, that depends on the number of open connections.
   
   \subsubsection{Segmentation}
   Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames have reached previously without errors. If the segments are smaller, the traffic becomes lower.

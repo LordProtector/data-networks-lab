@@ -4,6 +4,15 @@
  * @authors Stefan Tombers, Alexander Bunte, Jonas Bürse
  *
  * Implementation of the transport layer.
+ * 
+ * The transport layer segments messages and streams them to the receiver.
+ * It implements reliable data transfer using cumulative acknowledgements
+ * and resending of unacknowledged segments.
+ * 
+ * For flow control a sliding window of maximal sendable segments is 
+ * maintained. The max window size depends on the number of open
+ * connections. The Reno algorithm is used for adapting the window size
+ * to the current network congestion.
  *
  */
 
@@ -19,6 +28,7 @@
 #include "transport.h"
 #include "buffer.h"
 #include "dring.h"
+
 
 /**
  * Size of a segment in byte.
@@ -89,17 +99,18 @@ typedef struct
 	VECTOR outSegments;     // Sent and queued segments without a received ACK.
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
-	size_t threshold;				// When to stop the slow start phase
-	size_t windowLimit;			// Maximal size of window
+	size_t threshold;       // When to stop the slow start phase
+	size_t windowLimit;	    // Maximal size of window
 	size_t nextOffset;      // The next offset the connection will send if the window moves. Initially it is 0.
 
 	CnetAddr addr;          // Address of the connected node
-	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
-	CnetTime deviation;		  // Safety margin for the variation in estimatedRTT.
-	CnetTime lastSendAck;		// Time the last acknowledgment was transmitted
-	int ackCounter;					// Congestion control: counts duplicated acks
-	size_t lastAckOffset;		// Congestion control: stores the last ACK received
+	CnetTime estimatedRTT;  // Estimated round time trip (RTT).
+	CnetTime deviation;	    // Safety margin for the variation in estimatedRTT.
+	CnetTime lastSendAck;   // Time the last acknowledgment was transmitted
+	int ackCounter;	        // Congestion control: counts duplicated acks
+	size_t lastAckOffset;   // Congestion control: stores the last ACK received
 } CONNECTION;
+
 
 /**
  * Data structure for one out segment. Out segments are segments which are not
@@ -108,7 +119,7 @@ typedef struct
  */
 typedef struct
 {
-	CnetTime sendTime;  			// Time when the segment was send last.
+	CnetTime sendTime;        // Time when the segment was send last.
 	CnetTimerID timerId;      // The ID of the timer to count the timeout.
 	CnetAddr addr;            // The destination address of the segment.
 	size_t size;              // Size of the out segment
@@ -116,6 +127,7 @@ typedef struct
 	int timesSend;
 	uint32_t offset;
 } OUT_SEGMENT;
+
 
 /**
  * Stores the connections a host holds.
@@ -125,8 +137,10 @@ typedef struct
  */
 HASHTABLE connections;
 
+
 CONNECTION* get_connection(CnetAddr addr);
 CnetTime get_timeout(CONNECTION *con);
+
 
 /**
  * Updates window limit for the given connection
@@ -141,10 +155,11 @@ void update_window_limit(CONNECTION *con)
 	con->windowLimit = ((maxWindow - hashtable_nitems(connections))
 											* network_get_bandwidth(con->addr)) / 10000000;
 	con->windowLimit = MIN(con->windowLimit, maxWindow);  // limit windowLimit
-	con->windowLimit = MAX(con->windowLimit, 1);					// ensure window limit is >0
+	con->windowLimit = MAX(con->windowLimit, 1);          // ensure window limit is >0
 	
 	printf("update window limit to %u\n", con->windowLimit);
 }
+
 
 /**
  * Creates a new connection for the given address. A connection contains
@@ -188,6 +203,7 @@ CONNECTION *create_connection(CnetAddr addr)
 	return ret;
 }
 
+
 /**
  * Lookup address in the connections table.
  * If it does not exists a new entry is created.
@@ -208,6 +224,7 @@ CONNECTION* get_connection(CnetAddr addr)
 	return con;
 }
 
+
 /**
  * Checks whether offset is affected by ackOffset.
  * Returns true if offset has already been acknowledged.
@@ -224,6 +241,7 @@ bool acknowledged(size_t offset, size_t ackOffset)
 	return (offset <= ackOffset && ackOffset - offset <= MAX_WINDOW_OFFSET) ||
 				 ((MAX_SEGMENT_OFFSET - offset) + ackOffset <= MAX_WINDOW_OFFSET);
 }
+
 
 /**
  * Updates the estimatedRTT and the Deviation value
@@ -248,6 +266,7 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 	#endif
 }
 
+
 /**
  * Returns and proper timeout value for the given connection.
  */
@@ -256,8 +275,8 @@ CnetTime get_timeout(CONNECTION *con)
 	return con->estimatedRTT + 4 * con->deviation;
 }
 
+
 /**
- *
  * Calculates the distance between startOffset and endOffset. 
  * This corresponds to the length of the message.
  *
@@ -273,6 +292,7 @@ size_t distance(size_t startOffset, size_t endOffset)
 		return (MAX_SEGMENT_OFFSET - startOffset) + endOffset;
 	}
 }
+
 
 /**
  * Marshals segment for efficient transmission. 
@@ -295,6 +315,7 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
 	return size + sizeof(seg->header);
 }
 
+
 /**
  * Unmarshals segment.
  *
@@ -315,6 +336,7 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 
 	return payloadSize;
 }
+
 
 /**
  * Sends an empty segment over the given connection
@@ -339,6 +361,7 @@ void transmit_ack(CONNECTION *con)
 	con->lastSendAck = nodeinfo.time_in_usec;
 	free(seg);
 }
+
 
 /**
  * Hands segment to network layer and starts timer.
@@ -377,6 +400,7 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 	}
 }
 
+
 /**
  * Transmits segments to address 'addr'
  * if window is not saturated and segments are available.
@@ -388,7 +412,7 @@ void transmit_segments(CnetAddr addr)
 	CONNECTION *con = get_connection(addr);
 	int timeout = 1;
 
-  //window not saturated and segments available
+	//window not saturated and segments available
 	for (int i = 0; i < con->windowSize && i < vector_nitems(con->outSegments); i++) {
 		OUT_SEGMENT *outSeg = vector_peek(con->outSegments, i, NULL);
 		if (outSeg->timerId == -1) {
@@ -403,6 +427,7 @@ void transmit_segments(CnetAddr addr)
 		}
 	}
 }
+
 
 /**
  * Transmits a message.
@@ -463,6 +488,7 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 
 	transmit_segments(addr);
 }
+
 
 /**
  * Receive a message.
