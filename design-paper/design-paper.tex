@@ -71,6 +71,9 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   \subsubsection{Segmentation}
   Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames have reached previously without errors. If the segments are smaller, the traffic becomes lower.
 
+  \subsection{Gearing}
+  To avoid that to be forwarded messages from other nodes are too much delayed, the transport layer hands newly created segments asynchronously to the lower layers. So other messages can be ordered between them in the link queue.
+
   \begin{figure}[p]
     \centering
     \includegraphics[width=0.9\textwidth]{images/flowgraph_overview.pdf}
