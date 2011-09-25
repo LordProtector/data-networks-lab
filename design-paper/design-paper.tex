@@ -83,33 +83,15 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
 
   \newpage
 
-\section{Results}
-\ifthenelse{\boolean{m2}}{% text for milestone 2
-  Our analysis shows that throughput and latency stays constant after a short period of time and the number of send / received messages increases linearly as assumed. Figure~\ref{fig:analysis} shows the behavior of the \code{saarnet2.txt} network for a simulation period of 10 min. The fluctuations at the beginning are due to the not filled queues after initialization. With our implementation we reach a throughput from Homburg to Saarbrücken of 9.1 kB/s and 116.8 kB/s the other way around.
-  
-  \begin{figure}[h]
-   \centering
-   \subfigure[Throughput]{
-    \label{fig:peptide1}
-    \includegraphics[width=0.48\textwidth]{images/milestone2/results-throughput.png}
-   }
-   \subfigure[Latency]{
-    \label{fig:peptide2}
-    \includegraphics[width=0.48\textwidth]{images/milestone2/results-latency.png}
-   }
-   \subfigure[Messages]{
-    \label{fig:peptide3}
-    \includegraphics[width=0.48\textwidth]{images/milestone2/results-messages.png}
-   }
 
-   \caption[Analysis of milestone 2]{\hcaption{Analysis of milestone 2.} The plots show the behavior for a 10 min simulation of \code{saarnet2.txt}.}
-   
-   \label{fig:analysis}
-  \end{figure}
+\ifthenelse{\boolean{m2}}{% text for milestone 2
+
 
 }{% text for milestone 3
-
+\section{Results}
   Our analysis shows that throughput and latency stays constant after a short period of time and the number of send / received messages increases linearly as assumed. Figure~\ref{fig:analysis} shows the behavior of the \code{saarnet3a.txt} network for a simulation period of 10 min. The fluctuations at the beginning are due to the not filled queues after initialization and the routing algorithm.
+  
+  Figure~\ref{fig:analysis2} shows the behavior of the \code{saarnet8a.txt} network for a simulation period of 15 min. Nearly all nodes are able to send messages a nearly any node. We also see the the network does not get congested.
 
   With our implementation we reach a throughput from Saarbrücken to Saarlouis of 106,0 kB/s and 7,5 kB/s the other way around. The poor throughputs of the other connections are due to the low message rate of the sending nodes. The latencies in this scenario converge to values around 50 ms, 700 ms and 1000 ms, depending on the link properties on the chosen route.
   
@@ -128,9 +110,26 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
     \includegraphics[width=0.48\textwidth]{images/milestone3/saarnet3a-messages.png}
    }
 
-   \caption[Analysis of milestone 3]{\hcaption{Analysis of milestone 3.} The plots show the behavior for a 10 min simulation of \code{saarnet3a.txt}.}
+   \caption[Analysis of milestone 3]{\hcaption{Analysis of milestone 3.} The plots show the behavior for a 10 min. simulation of \code{saarnet3a.txt}.}
    
    \label{fig:analysis}
+  \end{figure}
+  
+  \begin{figure}[h]
+   \centering
+   \subfigure[Throughput]{
+    \label{fig:peptide1}
+    \includegraphics[width=0.48\textwidth]{images/milestone3/saarnet8a-throughput.png}
+   }
+
+   \subfigure[Messages]{
+    \label{fig:peptide3}
+    \includegraphics[width=0.48\textwidth]{images/milestone3/saarnet8a-messages.png}
+   }
+
+   \caption[Analysis of milestone 3]{\hcaption{Analysis of milestone 3.} The plots show the behavior for a 15 min. simulation of \code{saarnet8a.txt}.}
+   
+   \label{fig:analysis2}
   \end{figure}
 }
 
