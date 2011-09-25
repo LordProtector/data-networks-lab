@@ -13,7 +13,7 @@
  * destination host.
  *
  * The second task is to build the forwarding table.
- * TODO using which algorithm?????
+ * This contains the link numbers with the smallest route weight for each address.
  *
  * For each datagram it is checked if it is "normal" data or a routing packet.
  */
@@ -417,11 +417,12 @@ bool update_routing_table(int link, DISTANCE_INFO inDistInfo, DISTANCE_INFO *out
 	/* enable message delivery to that node */
 	CNET_enable_application(inDistInfo.destAddr);
 
-// 	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
-// 	for(int i = 1; i <= link_num_links(); i++) {
-// 		printf("weight %d minBWD: %d ", entry[i].weight, entry[i].minBWD);
-// 	}
-// 	puts("");puts("");
+	/* Logging */
+	printf("Routing table updated on node %d for destination %d\n", nodeinfo.address, inDistInfo.destAddr);
+	for(int i = 1; i <= link_num_links(); i++) {
+		printf("\t(weight %d minBWD: %d)\t", entry[i].weight, entry[i].minBWD);
+	}
+	puts("");
 
 	return bestChoiceChanged;
 }

@@ -23,13 +23,11 @@
 /**
  * Size of a segment in byte.
  */
-//8182 also a good value
 #define SEGMENT_SIZE 1024
 
 /**
  * Maximal number of segments in storage and under transmission.
  */
-//15 also a good value
 #define MAX_WINDOW_SIZE 32
 
 /**
@@ -113,8 +111,8 @@ typedef struct
 	CnetAddr addr;            // The destination address of the segment.
 	size_t size;              // Size of the out segment
 	SEGMENT *seg;             // Pointer to the data stored in the segment.
-	int timesSend;
-	uint32_t offset;
+	int timesSend;						// number of times this segment was already transmitted
+	uint32_t offset;					// offset of the segments payload
 } OUT_SEGMENT;
 
 /**
@@ -130,7 +128,7 @@ CnetTime get_timeout(CONNECTION *con);
 
 /**
  * Updates window limit for the given connection
- * dependent on the number of open connections and the connection's bandwidth.
+ * dependent on the number of open connections and the connections bandwidth.
  * 
  * @param con The connection for which the window limit should be updated.
  */
