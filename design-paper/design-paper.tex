@@ -56,6 +56,12 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
 \subsection{Transport Layer}
   The main task of the transport layer is to provide reliable data transfer and congestion control.
 
+  \subsubsection{Segmentation}
+  Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames have reached previously without errors. If the segments are smaller, the traffic becomes lower.
+
+  \subsubsection{Gearing}
+  To avoid that to be forwarded messages from other nodes are too much delayed, the transport layer hands newly created segments asynchronously to the lower layers. So other messages can be ordered between them in the link queue.
+
   \subsubsection{Reliable Data Transfer}
   Reliable data transfer means that all messages send on the network will be correctly delivered in order to the application layer of the receiver. To provide this service, the transport layer uses cumulative acknowledgements, sequence numbers in form of offsets and an isLast flag to identify the end of a message. The transport layer has the notion of a connection for all communication partners, i.e. in Cnet that means all other nodes in the system.
   
@@ -67,14 +73,8 @@ Beside the two layers, physical and application layer, Cnet provides we implemen
   
   \subsubsection{Congestion Control}
   Additionally this layer provides congestion control using the Reno algorithm explained in the lecture using a slow start and congestion avoidance phase with additive increase and multiplicative decrease as well as the fast recovery phase for three duplicated ACKs. We found out, that high window sizes result in a weaker performance, thus we choke the growing window at a maximal window size, that depends on the number of open connections.
-  
-  \subsubsection{Segmentation}
-  Due to smaller MTU than the size of the messages we additionally segment messages on this layer to decrease the number of resend messages in case of corruption. If a frame on the link layer gets corrupt, we need to resend the whole segment the whole path the frames have reached previously without errors. If the segments are smaller, the traffic becomes lower.
 
-  \subsection{Gearing}
-  To avoid that to be forwarded messages from other nodes are too much delayed, the transport layer hands newly created segments asynchronously to the lower layers. So other messages can be ordered between them in the link queue.
-
-  \begin{figure}[p]
+  \begin{figure}[h]
     \centering
     \includegraphics[width=0.9\textwidth]{images/flowgraph_overview.pdf}
     \caption[Overview Layers]{\hcaption{Overview Layers.} Overview of the call hierarchy of the different layers.}
