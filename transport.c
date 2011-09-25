@@ -243,7 +243,7 @@ CnetTime get_timeout(CONNECTION *con)
  * Calculates the distance between startOffset and endOffset. 
  * This corresponds to the length of the message.
  *
- * @param startOffset End offset for the calculation.
+ * @param startOffset Start offset for the calculation.
  * @param endOffset End offset of the calculation.
  * @return Distance between start and end offset.
  */
@@ -268,7 +268,7 @@ size_t distance(size_t startOffset, size_t endOffset)
  */
 size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size_t size)
 {
-	//encode isLast in offset
+	/* encode isLast in offset */
 	seg->header.offset    = header->offset | (header->isLast ? MAX_SEGMENT_OFFSET : 0);
 	seg->header.ackOffset = header->ackOffset;
 
@@ -287,7 +287,7 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
  */
 size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, size_t size)
 {
-	//decode isLast from offset
+	/* decode isLast from offset */
 	header->isLast    = seg->header.offset & MAX_SEGMENT_OFFSET;
 	header->offset    = seg->header.offset ^ (header->isLast ? MAX_SEGMENT_OFFSET : 0);
 	header->ackOffset = seg->header.ackOffset;
@@ -296,6 +296,30 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 	*payload = seg->payload;
 
 	return payloadSize;
+}
+
+/**
+ * Sends an empty segment over the given connection
+ * in order to explicitly acknowledge received segments.
+ * 
+ * @param con The connection to send the data over.
+ */
+void transmit_ack(CONNECTION *con)
+{
+	SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
+	segment_header header;
+
+	header.offset    = con->nextOffset - 1;
+	header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
+	header.isLast    = true;
+	#if LOGGING == true
+		printf("%lld: [send_not_piggybacked_ack] to_node: %d\n", nodeinfo.time_in_usec, con->addr);
+	#endif
+
+	size_t segSize = marshal_segment(seg, &header, NULL, 0);
+	network_transmit(con->addr, (char *)seg, segSize);
+	con->lastSendAck = nodeinfo.time_in_usec;
+	free(seg);
 }
 
 /**
@@ -437,7 +461,6 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
  */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
-
 	CONNECTION *con = get_connection(addr);
 
 	#if LOGGING == true
@@ -455,7 +478,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	size_t payloadSize = unmarshal_segment(segment, &header, &payload, size);
 	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart); //the offset the node is waiting for
 
-	//congestion control ala Reno
+	/* congestion control ala Reno */
 #if USE_RENO == true
 	if(header.ackOffset == con->lastAckOffset) {
 		if(payloadSize == 0){ // only increase if a non piggybacked ACK is received
@@ -466,7 +489,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		con->lastAckOffset = header.ackOffset;
 	}
 
-	//calculate if fast recovery phase should be started
+	/* calculate if fast recovery phase should be started */
 	if (con->ackCounter > 3 && payloadSize != 0) {
 		con->ackCounter = 0;
 		if(con->windowSize > 1) {
@@ -478,7 +501,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 					 nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
 		#endif
 
-		//perform fast retransmit
+		/* perform fast retransmit */
 		if(vector_nitems(con->outSegments) > 0) {
 			size_t segmentSize;
 			OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
@@ -527,6 +550,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		endOffset %= MAX_SEGMENT_OFFSET;
 		assert(acknowledged(outSeg->offset, header.ackOffset));
 
+		/* Remove all acknowledged segments from output buffer */
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
@@ -570,20 +594,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	if (payloadSize != 0 && numSentSegments == con->numSentSegments && 
 			nodeinfo.time_in_usec - con->lastSendAck > ACK_TIME)
 	{
-		SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
-		segment_header header;
-
-		header.offset    = con->nextOffset - 1;
-		header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
-		header.isLast    = true;
-		#if LOGGING == true
-			printf("%lld: [send_not_piggybacked_ack] to_node: %d\n", nodeinfo.time_in_usec, addr);
-		#endif
-
-		size_t segSize = marshal_segment(seg, &header, data, 0);
-		network_transmit(addr, (char *)seg, segSize);
-		con->lastSendAck = nodeinfo.time_in_usec;
-		free(seg);
+		transmit_ack(con);
 	}
 	#endif
 }

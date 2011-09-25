@@ -308,6 +308,7 @@ void transmit_distance_ack(int link)
  * changes the routing table accordingly and potentially broadcasts
  * changes in forwarding decisions.
  * Drops all out of order routing segments (relies on ordered resend).
+ * 
  * @param link Link which received the routing segment.
  * @param data The received routing segment.
  * @param size Size of the routing segment.
