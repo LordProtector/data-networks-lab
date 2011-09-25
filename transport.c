@@ -17,7 +17,6 @@
 #include "datatypes.h"
 #include "network.h"
 #include "transport.h"
-#include "bitmap.h"
 #include "buffer.h"
 #include "dring.h"
 
@@ -58,15 +57,26 @@
  */
 #define ACK_TIME 10000
 
+/**
+ * If true, newly created segments are transmitted asynchronously.
+ */
 #define USE_GEARING true
 
+/**
+ * If true, segments are explicitly acknowledged, when it is unlikely,
+ * that a segment, which could piggyback it, is send in the other direction, soon.
+ */
 #define EXPLICIT_ACK true
 
+/**
+ * If true, the first sent segment still waiting for acknowledgment
+ * is retransmitted after receiving three times the same acknowledgment.
+ */
 #define USE_RENO true
 
 
 /**
- * Data structure for one connection.
+ * Data structure for a connection.
  */
 typedef struct
 {
@@ -79,13 +89,14 @@ typedef struct
 	VECTOR outSegments;     // Sent and queued segments without a received ACK.
 	size_t numSentSegments; // Which of the outSegments have been send (which is the next segment to send).
 	size_t windowSize;      // Size of the window.
-	size_t threshold;
+	size_t threshold;				// When to stop the slow start phase
+	size_t windowLimit;			// Maximal size of window
 	size_t nextOffset;      // The next offset the connection will send if the window moves. Initially it is 0.
 
 	CnetAddr addr;          // Address of the connected node
 	CnetTime estimatedRTT;	// Estimated round time trip (RTT).
 	CnetTime deviation;		  // Safety margin for the variation in estimatedRTT.
-	CnetTime lastSendAck;
+	CnetTime lastSendAck;		// Time the last acknowledgment was transmitted
 	int ackCounter;					// Congestion control: counts duplicated acks
 	size_t lastAckOffset;		// Congestion control: stores the last ACK received
 } CONNECTION;
@@ -97,7 +108,7 @@ typedef struct
  */
 typedef struct
 {
-	CnetTime sendTime;  // Time when the segment was send last.
+	CnetTime sendTime;  			// Time when the segment was send last.
 	CnetTimerID timerId;      // The ID of the timer to count the timeout.
 	CnetAddr addr;            // The destination address of the segment.
 	size_t size;              // Size of the out segment
@@ -106,18 +117,16 @@ typedef struct
 	uint32_t offset;
 } OUT_SEGMENT;
 
-
-CONNECTION* get_connection(CnetAddr addr);
-CnetTime get_timeout(CONNECTION *con);
-
 /**
  * Stores the connections a host holds.
- * A new entry is added whenever message from/to previously unknown host
- * arrives.
+ * A new entry is added whenever message from/to previously unknown host arrives.
+ * 
  * host address -> CONNECTION
  */
 HASHTABLE connections;
 
+CONNECTION* get_connection(CnetAddr addr);
+CnetTime get_timeout(CONNECTION *con);
 
 /**
  * Creates a new connection for the given address. A connection contains
@@ -162,6 +171,26 @@ CONNECTION *create_connection(CnetAddr addr)
 }
 
 /**
+ * Lookup address in the connections table.
+ * If it does not exists a new entry is created.
+ *
+ * @param addr The address to look up.
+ * @return The corresponding CONNECTION from the connection table.
+ */
+CONNECTION* get_connection(CnetAddr addr)
+{
+	char key[5];
+	int2string(key, addr);
+	CONNECTION *con = hashtable_find(connections, key, NULL);
+
+	if (con == NULL) {
+		con = create_connection(addr);
+	}
+
+	return con;
+}
+
+/**
  * Checks whether offset is affected by ackOffset.
  * Returns true if offset has already been acknowledged.
  *
@@ -189,9 +218,6 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 	double x = 0.125;
 	double y = 0.25;
 
-	//~ printf("update_rtt(sampleRTT: %lld)\n", sampleRTT);
-	//~ printf("old_estRTT: %lld, old dev: %lld, timeout: %lld\n", con->estimatedRTT, con->deviation, get_timeout(con));
-
 	if (con->estimatedRTT != TRANSPORT_TIMEOUT) {
 		con->estimatedRTT = (1-x) * con->estimatedRTT + x * sampleRTT;
 		con->deviation =    (1-y) * con->deviation    + y * abs(sampleRTT - con->estimatedRTT);
@@ -199,7 +225,8 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
 		con->estimatedRTT = sampleRTT;
 	}
 	#if LOGGING == true
-		printf("%lld: [update_rtt] to_node: %d sampleRTT: %d new_estRTT: %d new_dev: %d timeout: %d\n\n", nodeinfo.time_in_usec, con->addr, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
+		printf("%lld: [update_rtt] to_node: %d sampleRTT: %d new_estRTT: %d new_dev: %d timeout: %d\n",
+					 nodeinfo.time_in_usec, con->addr, sampleRTT, con->estimatedRTT, con->deviation, get_timeout(con));
 	#endif
 }
 
@@ -208,21 +235,15 @@ void update_rtt(CONNECTION *con, CnetTime sampleRTT)
  */
 CnetTime get_timeout(CONNECTION *con)
 {
-	//return TRANSPORT_TIMEOUT;
-	int timeout = con->estimatedRTT + 4 * con->deviation;;
-	//if(timeout > 2 * TRANSPORT_TIMEOUT) {
-		//timeout = 2 * TRANSPORT_TIMEOUT;
-	//}
-	return timeout;
-	//return 4 * con->estimatedRTT;
+	return con->estimatedRTT + 4 * con->deviation;
 }
 
 /**
  *
- * Calculates the distance between startOffset and endOffset. This corresponds
- * to the length of the message.
+ * Calculates the distance between startOffset and endOffset. 
+ * This corresponds to the length of the message.
  *
- * @param startOffset End offset for the calculation.
+ * @param startOffset Start offset for the calculation.
  * @param endOffset End offset of the calculation.
  * @return Distance between start and end offset.
  */
@@ -236,8 +257,8 @@ size_t distance(size_t startOffset, size_t endOffset)
 }
 
 /**
- * Marshals segment for efficient transmission. Segment needs to be unmarshaled
- * before usage.
+ * Marshals segment for efficient transmission. 
+ * Segment needs to be unmarshaled before usage.
  *
  * @param seg Marshaled segment.
  * @param header Header of the segment.
@@ -247,7 +268,7 @@ size_t distance(size_t startOffset, size_t endOffset)
  */
 size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size_t size)
 {
-	//encode isLast in offset
+	/* encode isLast in offset */
 	seg->header.offset    = header->offset | (header->isLast ? MAX_SEGMENT_OFFSET : 0);
 	seg->header.ackOffset = header->ackOffset;
 
@@ -266,7 +287,7 @@ size_t marshal_segment(SEGMENT *seg, segment_header *header, char *payload, size
  */
 size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, size_t size)
 {
-	//decode isLast from offset
+	/* decode isLast from offset */
 	header->isLast    = seg->header.offset & MAX_SEGMENT_OFFSET;
 	header->offset    = seg->header.offset ^ (header->isLast ? MAX_SEGMENT_OFFSET : 0);
 	header->ackOffset = seg->header.ackOffset;
@@ -275,6 +296,30 @@ size_t unmarshal_segment(SEGMENT *seg, segment_header *header, char **payload, s
 	*payload = seg->payload;
 
 	return payloadSize;
+}
+
+/**
+ * Sends an empty segment over the given connection
+ * in order to explicitly acknowledge received segments.
+ * 
+ * @param con The connection to send the data over.
+ */
+void transmit_ack(CONNECTION *con)
+{
+	SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
+	segment_header header;
+
+	header.offset    = con->nextOffset - 1;
+	header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
+	header.isLast    = true;
+	#if LOGGING == true
+		printf("%lld: [send_not_piggybacked_ack] to_node: %d\n", nodeinfo.time_in_usec, con->addr);
+	#endif
+
+	size_t segSize = marshal_segment(seg, &header, NULL, 0);
+	network_transmit(con->addr, (char *)seg, segSize);
+	con->lastSendAck = nodeinfo.time_in_usec;
+	free(seg);
 }
 
 /**
@@ -296,13 +341,17 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 
 	if (winSeg == NULL || acknowledged(outSeg->offset, winSeg->offset)) {
 		#if LOGGING == true
-		printf("%lld: [transmit_segment] to_node: %d threshold: %d window_size: %d numOutSeg: %d numSentSegments %d\n", nodeinfo.time_in_usec, outSeg->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
+		printf("%lld: [transmit_segment] to_node: %d threshold: %d \
+						window_size: %d numOutSeg: %d numSentSegments %d\n",
+						nodeinfo.time_in_usec, outSeg->addr, con->threshold,
+						con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
 		#endif
 
 		outSeg->timesSend++;
 		outSeg->seg->header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
 		network_transmit(outSeg->addr, (char *)outSeg->seg, outSeg->size);
-		outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, outSeg->timesSend * get_timeout(con), (CnetData) outSeg);
+		CnetTime timeout = outSeg->timesSend * get_timeout(con);
+		outSeg->timerId = CNET_start_timer(TRANSPORT_TIMER, timeout, (CnetData) outSeg);
 		con->lastSendAck = nodeinfo.time_in_usec;
 	} else {
 		outSeg->timerId = -1;
@@ -311,8 +360,8 @@ void transmit_segment(OUT_SEGMENT *outSeg)
 }
 
 /**
- * Transmits segments to address 'addr' if window is not saturated and segments
- * are available.
+ * Transmits segments to address 'addr'
+ * if window is not saturated and segments are available.
  *
  * @param addr Address to transmit segments to.
  */
@@ -399,9 +448,10 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
 /**
  * Receive a message.
  *
- * A new connection is created if it is the first to send to or receive from
- * 'addr'. Received data are stored in a buffer if they are not already acknowledged. If the buffer contains complete messages, they are forwarded to the application and deleted from the buffer.
- *
+ * A new connection is created if it is the first to send to or receive from 'addr'.
+ * Received data are stored in a buffer if they are not already acknowledged.
+ * If the buffer contains complete messages,
+ * they are forwarded to the application and deleted from the buffer.
  *
  * Finally it triggers the sending of segments.
  *
@@ -411,11 +461,13 @@ void transport_transmit(CnetAddr addr, char *data, size_t size)
  */
 void transport_receive(CnetAddr addr, char *data, size_t size)
 {
-
 	CONNECTION *con = get_connection(addr);
 
 	#if LOGGING == true
-	printf("%lld: [receive_segment] from_node: %d threshold: %d window_size: %d numOutSeg: %d numSentSegments: %d\n", nodeinfo.time_in_usec, addr, con->threshold, con->windowSize, vector_nitems(con->outSegments), con->numSentSegments);
+	printf("%lld: [receive_segment] from_node: %d threshold: %d \
+					window_size: %d numOutSeg: %d numSentSegments: %d\n",
+					nodeinfo.time_in_usec, addr, con->threshold, con->windowSize,
+					vector_nitems(con->outSegments), con->numSentSegments);
 	#endif
 
 	SEGMENT *segment = (SEGMENT *)data;
@@ -426,7 +478,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 	size_t payloadSize = unmarshal_segment(segment, &header, &payload, size);
 	size_t ackOffset   = buffer_next_invalid(con->inBuf, con->bufferStart); //the offset the node is waiting for
 
-	//congestion control ala Reno
+	/* congestion control ala Reno */
 #if USE_RENO == true
 	if(header.ackOffset == con->lastAckOffset) {
 		if(payloadSize == 0){ // only increase if a non piggybacked ACK is received
@@ -437,25 +489,24 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		con->lastAckOffset = header.ackOffset;
 	}
 
-	//calculate if fast recovery phase should be started
+	/* calculate if fast recovery phase should be started */
 	if (con->ackCounter > 3 && payloadSize != 0) {
 		con->ackCounter = 0;
 		if(con->windowSize > 1) {
-			con->threshold = con->windowSize / 2;
-			con->windowSize /= 2;
+			con->threshold  = con->windowSize / 2;
+			con->windowSize = con->threshold;
 		}
 		#if LOGGING == true
-		printf("%lld: [Reno_3_dup_ack] to_node: %d threshold: %d window_size: %d numOutSeg: %d\n", nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
+		printf("%lld: [Reno_3_dup_ack] to_node: %d threshold: %d window_size: %d numOutSeg: %d\n",
+					 nodeinfo.time_in_usec, con->addr, con->threshold, con->windowSize, vector_nitems(con->outSegments));
 		#endif
 
-		//perform fast retransmit
+		/* perform fast retransmit */
 		if(vector_nitems(con->outSegments) > 0) {
 			size_t segmentSize;
 			OUT_SEGMENT *outSeg = vector_peek(con->outSegments, 0, &segmentSize);
 			if(outSeg->timerId != -1){
 				CHECK(CNET_stop_timer(outSeg->timerId));
-			} else {
-				fprintf(stderr, "found segment with invalid timer id to address %d at node %d", outSeg->addr, nodeinfo.address);
 			}
 			transmit_segment(outSeg);
 		}
@@ -499,6 +550,7 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 		endOffset %= MAX_SEGMENT_OFFSET;
 		assert(acknowledged(outSeg->offset, header.ackOffset));
 
+		/* Remove all acknowledged segments from output buffer */
 		while (acknowledged(endOffset, header.ackOffset)) {
 			outSeg = vector_remove(con->outSegments, 0, NULL);
 			CnetTime sampleRTT = nodeinfo.time_in_usec - outSeg->sendTime;
@@ -520,7 +572,8 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 			/* Congestion control */
 			if (con->windowSize < con->threshold) { // slow start
 				con->windowSize = MIN(2 * con->windowSize, MAX_WINDOW_SIZE);
-			} else if (con->windowSize < MAX_WINDOW_SIZE) { // congestion avoidance
+			} 
+			else if (con->windowSize < MAX_WINDOW_SIZE) { // congestion avoidance
 				con->windowSize++;
 			}
 		}
@@ -538,43 +591,12 @@ void transport_receive(CnetAddr addr, char *data, size_t size)
 
 	#if EXPLICIT_ACK == true
 	/* In case piggybacking ack is not possible, send it directly */
-	if (payloadSize != 0 && numSentSegments == con->numSentSegments && nodeinfo.time_in_usec - con->lastSendAck > ACK_TIME) {
-		SEGMENT *seg = malloc(sizeof(marshaled_segment_header));
-		segment_header header;
-
-		header.offset    = con->nextOffset - 1;
-		header.ackOffset = buffer_next_invalid(con->inBuf, con->bufferStart);
-		header.isLast    = true;
-		#if LOGGING == true
-			printf("%lld: [send_not_piggybacked_ack] to_node: %d\n", nodeinfo.time_in_usec, addr);
-		#endif
-
-		size_t segSize = marshal_segment(seg, &header, data, 0);
-		network_transmit(addr, (char *)seg, segSize);
-		con->lastSendAck = nodeinfo.time_in_usec;
-		free(seg);
+	if (payloadSize != 0 && numSentSegments == con->numSentSegments && 
+			nodeinfo.time_in_usec - con->lastSendAck > ACK_TIME)
+	{
+		transmit_ack(con);
 	}
 	#endif
-}
-
-/**
- * Lookup address in the connections table.
- * If it does not exists a new entry is created.
- *
- * @param addr The address to look up.
- * @return The corresponding CONNECTION from the connection table.
- */
-CONNECTION* get_connection(CnetAddr addr)
-{
-	char key[5];
-	int2string(key, addr);
-	CONNECTION *con = hashtable_find(connections, key, NULL);
-
-	if (con == NULL) {
-		con = create_connection(addr);
-	}
-
-	return con;
 }
 
 
